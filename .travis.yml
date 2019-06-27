@@ -14,11 +14,11 @@ install:
 
 # NO NEED FOR ENV, THE ENTIRE BUILDING WILL STOP IF 'SCRIPT' FAILS
 script:
-  - py.test
+  - PYTHONPATH=. py.test ./tests
 
 before_deploy:
   - codecov
-  - openssl aes-256-cbc -K $encrypted_15a04db7c7ae_key -iv $encrypted_15a04db7c7ae_iv -in .pypirc.enc -out ~/.pypirc -d
+  - openssl aes-256-cbc -K $encrypted_5cad0a958d01_key -iv $encrypted_5cad0a958d01_iv -in .pypirc.enc -out ~\/.pypirc -d
 deploy:
   provider: script
   skip_cleanup: true

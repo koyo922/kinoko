@@ -1,2 +1,8 @@
+typing; python_version < "3.4"
+pathlib2; python_version < "3.4"
+requests
+redo
+docopt
 pytest
 codecov
+pyfunctional
