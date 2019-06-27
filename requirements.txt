@@ -1,8 +1,12 @@
-typing; python_version < "3.4"
-pathlib2; python_version < "3.4"
-requests
-redo
-docopt
-pytest
+arrow
 codecov
+docopt
+lazy-property
+pathlib2; python_version < "3.4"
 pyfunctional
+pytest
+redo
+requests
+six
+tqdm
+typing; python_version < "3.4"
