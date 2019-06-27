@@ -41,7 +41,7 @@ def main(console_args=sys.argv[1:], key_fmt_fn=strip_fields):
     """
     入口
     :param console_args:
-    :param key_fmt_fn: 对key的格式化函数；默认为 simeji_nlp_py.func.strip_fields
+    :param key_fmt_fn: 对key的格式化函数；默认为 kinoko.func.strip_fields
     :return:
     """
     parser = argparse.ArgumentParser()

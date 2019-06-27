@@ -3,7 +3,7 @@
 """
 Setup script.
 
-Authors: qianweishuo(koyo922@qq.com)
+Authors: qianweishuo(qzy922@gmail.com)
 Date:    2019/06/27 22:23:26
 """
 
