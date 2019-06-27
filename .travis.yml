@@ -14,7 +14,7 @@ install:
 
 # NO NEED FOR ENV, THE ENTIRE BUILDING WILL STOP IF 'SCRIPT' FAILS
 script:
-  - PYTHONPATH=. py.test -v --cov-report term --cov=
+  - py.test -v --cov-report=xml --cov=kinoko tests
 
 before_deploy:
   - codecov --token=6cd07a53-f1bf-4929-83ae-6d394c0802d1
