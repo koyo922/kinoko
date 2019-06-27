@@ -14,7 +14,7 @@ install:
 
 # NO NEED FOR ENV, THE ENTIRE BUILDING WILL STOP IF 'SCRIPT' FAILS
 script:
-  - py.test
+  - PYTHONPATH=. py.test ./tests
 
 before_deploy:
   - codecov

@@ -1,0 +1,40 @@
+#!/bin/bash
+#
+# Author: qianweishuo
+# Date: 2019/06/14
+# Brief:
+#   color print message
+# Globals:
+#   None
+# Arguments:
+#   1:the message for `echo -e`
+#   2:level. choices: OK, FAIL, INFO, DEBUG
+# Returns:
+#   succ:0
+#   fail:other
+
+
+function main(){
+    MSG=$1
+    LEVEL=${2-INFO}
+    case "${LEVEL}" in
+    OK)
+        echo -e "==> \e[32;1m${MSG}\e[0m" # green
+        ;;
+    FAIL)
+        echo -e "==> \e[31;1m${MSG}\e[0m" # red
+        ;;
+    INFO)
+        echo -e "==> \e[33;1m${MSG}\e[0m" # yellow
+        ;;
+    DEBUG)
+        echo -e "==> \e[37;1m${MSG}\e[0m" # light gray
+        ;;
+    *)
+        echo "unsupported LEVEL=${LEVEL}, valid choices: {OK, FAIL, INFO, DEBUG}"
+        exit 1
+        ;;
+    esac
+}
+
+main "$@"
