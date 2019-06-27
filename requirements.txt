@@ -5,6 +5,7 @@ lazy-property
 pathlib2; python_version < "3.4"
 pyfunctional
 pytest>=4.6.3
+pytest-cov
 redo
 requests
 six
