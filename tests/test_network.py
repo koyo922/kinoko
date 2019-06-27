@@ -15,7 +15,7 @@ from kinoko.text.io import file_wrapper
 from kinoko.misc.network.chase_redirection import chase_url_cli, chase_redirection, ChaseError
 
 url_jumps = [
-    ('http://airbrake.io', ['http://airbrake.io', 'https://airbrake.io/']),
+    ('http://www.cyberciti.biz/tips/', ['http://www.cyberciti.biz/tips/', 'https://www.cyberciti.biz/tips/']),
     ('http://apollo.auto/index_cn.html', ['http://apollo.auto/index_cn.html']),
     ('http://nonexist.site', [])
 ]
@@ -41,7 +41,7 @@ def test_chase_url_cli(tmp_path):
 
     out_path = (tmp_path / 'out').as_posix()
     chase_url_cli(['-i', in_path, '-o', out_path, '--template', '{n_jumps}\t{url}\t{tgt_url}'])
-    expected_lines = ['2\thttp://airbrake.io\thttps://airbrake.io/\n',
-                      '1\thttp://apollo.auto/index_cn.html\thttp://apollo.auto/index_cn.html\n',
-                      '-1\thttp://nonexist.site\tNone\n']
+    expected_lines = ['{n_jumps}\t{url}\t{tgt_url}\n'.format(n_jumps=-1 if not j else len(j), url=u,
+                                                             tgt_url=None if len(j) == 0 else j[-1])
+                      for u, j in url_jumps]
     assert expected_lines == list(file_wrapper(out_path))

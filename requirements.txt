@@ -4,7 +4,7 @@ docopt
 lazy-property
 pathlib2; python_version < "3.4"
 pyfunctional
-pytest
+pytest>=4.6.3
 redo
 requests
 six
