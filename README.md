@@ -1,2 +1,2 @@
 # kinoko
-python package for Japanese NLP and many other utils
+python/bash package for Japanese NLP and many other utils
