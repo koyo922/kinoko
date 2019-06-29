@@ -2,12 +2,18 @@ arrow
 codecov
 docopt
 lazy-property
+mkdocs==0.12.0; python_version < "3.4"
+mkdocs; python_version >= "3.4"
+mkdocs-material
 pathlib2; python_version < "3.4"
 pyfunctional
+pymdown-extensions
 pytest>=4.6.3
 pytest-cov
 redo
 requests
 six
+tornado==4.3; python_version < "3.4"
+tornado; python_version >= "3.4"
 tqdm
 typing; python_version < "3.4"
