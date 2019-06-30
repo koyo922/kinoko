@@ -18,7 +18,7 @@ extra:
     language: 'en, ja'
   social:
     - type: 'weixin'
-      link: '../assets/images/wechat_koyo922.jpg'
+      link: '/assets/images/wechat_koyo922.jpg'
     - type: 'github'
       link: 'https://github.com/koyo922'
     - type: 'linkedin'

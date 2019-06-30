@@ -2,7 +2,7 @@
 
 ## Speed up your text workflow
 
-Kinoko is a Python/Bash package designed for common text/NLP pre/post processing tasks.
+Kinoko is a Python/Bash package designed for common text/NLP processing tasks.
 It has various handy tools integrated for easy installation and usage.
 
 ## Quick Start
