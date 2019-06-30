@@ -1,17 +1,27 @@
-# Welcome to MkDocs
+# Kinoko for Text
 
-For full documentation visit [mkdocs.org](http://mkdocs.org).
+## Speed up your text workflow
 
-## Commands
+Kinoko is a Python/Bash package designed for common text/NLP pre/post processing tasks.
+It has various handy tools integrated for easy installation and usage.
 
-* `mkdocs new [dir-name]` - Create a new project.
-* `mkdocs serve` - Start the live-reloading docs server.
-* `mkdocs build` - Build the documentation site.
-* `mkdocs help` - Print this help message.
+## Quick Start
 
-## Project layout
+Install the latest version of kinoko with `pip`:
 
-    mkdocs.yml    # The configuration file.
-    docs/
-        index.md  # The documentation homepage.
-        ...       # Other markdown pages, images and other files.
+```bash
+pip install kinoko
+```
+
+## What to expect
+
+- Various Python Class/Function for:
+    - common text processing tasks(csv processing, etc.)
+    - python code profiling & efficiency-boosting utils(e.g. parallelization)
+- Bash scripts for:
+    - virtual-memory management
+    - color printing
+- More to come ...
+    - Any contribution is welcomed
+
+For detailed instructions see the [getting started guide](getting-started.md).

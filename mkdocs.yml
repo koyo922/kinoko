@@ -1,4 +1,4 @@
-site_name: Kinoko
+site_name: Kinoko for Text
 site_description: Detailed Documentation for Kinoko
 site_author: Weishuo QIAN
 
@@ -59,7 +59,13 @@ markdown_extensions:
   - pymdownx.highlight
 
 nav:
-  - Home: index.md
-  - Get Started: start.md
-  - Format Specimen: format_specimen.md
+  - Kinoko: index.md
+  - Get Started: getting-started.md
+  - Text Processing:
+    - csv: csv.md
+    - logging: log.md
+  - Network: network.md
+  - Bash Utils: bash.md
+  - Functional Utils: func.md
   - Release Notes: changelog.md
+  - Format Specimen: format_specimen.md
