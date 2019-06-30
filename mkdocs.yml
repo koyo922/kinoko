@@ -10,13 +10,15 @@ theme:
 
 plugins:
   - search
+  - minify:
+      minify_html: true
 
 extra:
   search:
     language: 'en, ja'
   social:
     - type: 'weixin'
-      link: './assets/images/wechat_koyo922.jpg'
+      link: '../assets/images/wechat_koyo922.jpg'
     - type: 'github'
       link: 'https://github.com/koyo922'
     - type: 'linkedin'
@@ -27,29 +29,36 @@ extra_javascript:
   - ./assets/js/mathjax-config.js
 
 markdown_extensions:
-  - admonition
-  - codehilite:
-      guess_lang: true
+  - markdown.extensions.admonition
+  - markdown.extensions.codehilite:
+      guess_lang: false
       linenums: true
-  - meta
-  - toc:
+  - markdown.extensions.def_list
+  - markdown.extensions.footnotes
+  - markdown.extensions.meta
+  - markdown.extensions.toc:
       permalink: true
   - pymdownx.arithmatex
-  - pymdownx.betterem
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
   - pymdownx.critic
   - pymdownx.details
-  - pymdownx.extra
-  - pymdownx.highlight
+  - pymdownx.emoji:
+      emoji_generator: !!python/name:pymdownx.emoji.to_svg
   - pymdownx.inlinehilite
   - pymdownx.keys
-  - pymdownx.magiclink
+  - pymdownx.magiclink:
   - pymdownx.mark
   - pymdownx.smartsymbols
   - pymdownx.superfences
-  - pymdownx.tasklist
+  - pymdownx.tasklist:
+      custom_checkbox: true
   - pymdownx.tilde
+  - pymdownx.extra
+  - pymdownx.highlight
 
-pages:
+nav:
   - Home: index.md
   - Get Started: start.md
   - Format Specimen: format_specimen.md
