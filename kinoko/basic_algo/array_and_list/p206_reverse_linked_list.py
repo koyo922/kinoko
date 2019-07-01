@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # vim: tabstop=4 shiftwidth=4 expandtab number
 """
-https://leetcode-cn.com/problems/reverse-linked-list/
+反转一个单链表。
 
 示例:
 
@@ -18,13 +18,6 @@ https://leetcode-cn.com/problems/reverse-linked-list/
 Authors: qianweishuo<qzy922@gmail.com>
 Date:    2019/6/30 下午10:02
 """
-
-
-# Definition for singly-linked list.
-class ListNode(object):
-    def __init__(self, x):
-        self.val = x
-        self.next = None
 
 
 class Solution(object):
