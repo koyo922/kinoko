@@ -49,11 +49,10 @@ def test_agg_tsv(tmp_path, capsys):
     path = (tmp_path / 'evalset').as_posix()
     with file_wrapper(path, 'wt') as f:
         f.write(r"""
-わ      わ      笑      14614975
-わら      わ      笑      1000
-で      で      で      11270299
-で      で      で      1000
-が      が      が      11097238
+21      male      永强      1
+22      male      永强      2
+20      female      刘英      3
+20      female      刘英      4
 """.lstrip('\n'))
 
     # 1. 按照前三列聚合，sum最后一列
@@ -62,10 +61,9 @@ def test_agg_tsv(tmp_path, capsys):
                   '-a', 'sum'])
     captured = capsys.readouterr()
     assert r"""
-わ      わ      笑      14614975
-わら      わ      笑      1000
-で      で      で      11271299
-が      が      が      11097238
+21      male      永强      1
+22      male      永强      2
+20      female      刘英      7
 """.lstrip('\n') == captured.out
 
     # 2. 按照2~3列聚合，sum最后一列
@@ -74,7 +72,6 @@ def test_agg_tsv(tmp_path, capsys):
                   '-a', 'sum'])
     captured = capsys.readouterr()
     assert r"""
-わ      笑      14615975
-で      で      11271299
-が      が      11097238
+male      永强      3
+female      刘英      7
 """.lstrip('\n') == captured.out
