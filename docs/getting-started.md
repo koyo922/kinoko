@@ -121,20 +121,18 @@ aggregate a tsv/csv file
 
 ```bash
 cat <<'EOF' > infile.tsv
-わ      わ      笑      14614975
-わら      わ      笑      1000
-で      で      で      11270299
-で      で      で      1000
-が      が      が      11097238
+21      male      永强      1
+22      male      永强      2
+20      female      刘英      3
+20      female      刘英      4
 EOF
 
 # aggregation by first 3 columns, summing the last column
 aggtsv --infile infile.tsv --sep $'\t' \
     -k 0 1 2 -r 3 -a sum
-わ      わ      笑      14614975
-わら      わ      笑      1000
-で      で      で      11271299
-が      が      が      11097238
+21      male      永强      1
+22      male      永强      2
+20      female      刘英      7
 ```
 
 patch a tsv file via one or more reference files
