@@ -9,10 +9,13 @@ Date:    2019/7/8 下午11:07
 """
 from __future__ import unicode_literals
 
+import six
+
 import json
 
 
 # Definition for a binary tree node.
+@six.python_2_unicode_compatible
 class TreeNode(object):
     def __init__(self, x):
         self.val = x
@@ -68,6 +71,13 @@ class TreeNode(object):
 
     def to_json(self):
         return json.dumps([(n.val if n else None) for n in self.to_complete()])
+
+    def __str__(self):
+        return '({} -> {}, {})'.format(self.val, (self.left.val if self.left else None),
+                                     (self.right.val if self.right else None))
+
+    def __repr__(self):
+        return self.__str__()
 
 
 if __name__ == '__main__':
