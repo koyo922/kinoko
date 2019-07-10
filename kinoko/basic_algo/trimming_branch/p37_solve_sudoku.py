@@ -21,34 +21,43 @@ Date:    2019/7/9 下午11:27
 
 
 class Solution(object):
+    default_hint = set(map(str, range(1, 10)))
 
-    def is_valid(self, board, row, col, v):
-        cell_x, cell_y = (row // 3) * 3, (col // 3) * 3  # cell左上角坐标; 注意还要乘以3
-        for i in range(self.N):  # 遍历的不是行或者列或者cell；而是一起逐个遍历
-            x, y = divmod(i, 3)  # cell内部的 行/列偏移
-            if v in (board[i][col], board[row][i], board[cell_x + x][cell_y + y]):
-                return False
-        return True
+    def possible_candidates(self, board, i, j, hint=default_hint):
+        cell_x, cell_y = (i // 3) * 3, (j // 3) * 3
+        used = set(board[i]) | {board[I][j] for I in range(self.N)}
+        for d in range(self.N):
+            dx, dy = divmod(d, 3)
+            used.add(board[cell_x + dx][cell_y + dy])
+        return hint - used
 
-    def naive(self, board):
+    def naive(self, board, depth):
+        if depth >= len(self.candidates):
+            return board
+        (i, j), pre_calc_cands = self.candidates[depth]
+        for v in self.possible_candidates(board, i, j, hint=pre_calc_cands):  # 遍历尝试可行的选项
+            board[i][j] = v
+            ret = self.naive(board, depth + 1)  # 只要求就地改动，也可以只返回bool
+            if ret:
+                return ret
+            board[i][j] = '.'
+        return None
+
+    def get_candidates(self, board):
+        """ 预处理，算好每个坑位的可行选项 """
+        candidates = dict()
         for i in range(self.N):
             for j in range(self.N):
-                if board[i][j] != '.':
+                if board[i][j] != '.':  # 注意不要把题目给出数字的位置当做坑位
                     continue
-                for v in map(str, range(1, 10)):  # 遍历尝试 1~9
-                    if not self.is_valid(board, i, j, v):
-                        continue
-                    board[i][j] = v
-                    ret = self.naive(board)  # 只要求就地改动，也可以只返回bool
-                    if ret:
-                        return ret
-                    board[i][j] = '.'
-                return None
-        return board
+                candidates[(i, j)] = self.possible_candidates(board, i, j)
+        self.candidates = candidates.items()
+        self.candidates.sort(key=lambda x: len(x[1]))  # 优先解决选项少的坑位
 
     def solveSudoku(self, board):
         self.N = len(board)
-        return self.naive(board)  # 此题要求就地改动；但是这里也返回了正确的值
+        self.get_candidates(board)
+        return self.naive(board, depth=0)  # 此题要求就地改动；但是这里也返回了正确的值
 
 
 if __name__ == '__main__':
