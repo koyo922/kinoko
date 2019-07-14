@@ -49,18 +49,16 @@ class Solution(object):
 
     def newton_iter(self, x):
         """
-        f(t) = t**2 - x = 0
-        t' = t - f(t) / f'(t)
-           = t - (t*t - x) / 2*t
-           = (t*t + x) / 2*t
-           = (t + x/t) / 2
+        f(r) = r**2 - x = 0
+        r' = r - f(r) / f'(r)
+           = r - (r*r - x) / 2*r
+           = (r*r + x) / 2*r
+           = (r + x/r) / 2
         """
-        if x in (0, 1):
-            return x
-        prev_t, t = 0, 1.0
-        while int(t) != int(prev_t):  # 注意还是要比较整数部分
-            prev_t, t = t, (t + x / t) / 2
-        return int(t)
+        r = x
+        while r * r > x:
+            r = (r + x // r) // 2
+        return r
 
     def mySqrt(self, x):
         # return self.using_bisect(x)
