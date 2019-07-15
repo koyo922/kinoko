@@ -13,12 +13,33 @@ import subprocess
 from io import open
 import sys
 
+import six
 import tqdm
 
 try:
     from pathlib2 import Path
 except ImportError:
     from pathlib import Path
+
+
+def ensure_text(s, encoding='utf8'):
+    """ 确保进来的 str/unicode 全部转成 Text类型 """
+    if isinstance(s, six.binary_type):
+        return s.decode(encoding)
+    elif isinstance(s, six.text_type):
+        return s
+    else:
+        raise NotImplementedError('Unsupported argument s: {}'.format(repr(s)))
+
+
+def ensure_binary(s, encoding='utf8'):
+    """ 确保进来的 str/unicode 全部转成 Binary类型 """
+    if isinstance(s, six.binary_type):
+        return s
+    elif isinstance(s, six.text_type):
+        return s.encode(encoding)
+    else:
+        raise NotImplementedError('Unsupported argument s: {}'.format(repr(s)))
 
 
 def as_lines(f, total=None, desc=None, with_lineno=False):
