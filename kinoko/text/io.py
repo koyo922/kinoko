@@ -9,16 +9,38 @@ Date:    2019/6/27 下午11:20
 """
 from __future__ import absolute_import, unicode_literals
 
+import json
 import subprocess
 from io import open
 import sys
 
+import six
 import tqdm
 
 try:
     from pathlib2 import Path
 except ImportError:
     from pathlib import Path
+
+
+def ensure_text(s, encoding='utf8'):
+    """ 确保进来的 str/unicode 全部转成 Text类型 """
+    if isinstance(s, six.binary_type):
+        return s.decode(encoding)
+    elif isinstance(s, six.text_type):
+        return s
+    else:
+        raise NotImplementedError('Unsupported argument s: {}'.format(repr(s)))
+
+
+def ensure_binary(s, encoding='utf8'):
+    """ 确保进来的 str/unicode 全部转成 Binary类型 """
+    if isinstance(s, six.binary_type):
+        return s
+    elif isinstance(s, six.text_type):
+        return s.encode(encoding)
+    else:
+        raise NotImplementedError('Unsupported argument s: {}'.format(repr(s)))
 
 
 def as_lines(f, total=None, desc=None, with_lineno=False):
@@ -71,3 +93,8 @@ def n_lines(file_path):
         return None
     num = subprocess.check_output(['wc', '-l', file_path]).decode('utf8')
     return int(num.strip().split(' ')[0])
+
+
+def dump_utf8(obj, indent=None):
+    """ json dump without ensure_ascii """
+    return json.dumps(obj, ensure_ascii=False, indent=indent)

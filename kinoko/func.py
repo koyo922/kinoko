@@ -8,9 +8,11 @@
 Authors: qianweishuo<qzy922@gmail.com>
 Date:    2019/6/27 下午11:20
 """
-from typing import Any, Iterable, Union
+from typing import Any, Iterable, Union, TypeVar
 from functional.pipeline import Sequence
 from functional import seq
+
+T = TypeVar('T')
 
 
 def strip_fields(tup):
@@ -49,3 +51,29 @@ def static_vars(**kwargs):
         return func
 
     return decorate
+
+
+def try_flatten(sequence):
+    # type: (Sequence[T]) -> Union[T, Sequence[T]]
+    """
+    trying to flatten a sequence;
+    - if it is none or empty, return none
+    - if len(it)==1, return it's only element(FLATTEN)
+    - if len(it)>1, return itself untouched
+    :param sequence:
+    :return:
+    """
+    if sequence is None or len(sequence) == 0:  # pragma: no cover
+        return None
+    if len(sequence) == 1:
+        return tuple(sequence)[0]
+    return sequence
+
+
+def try_tuple(obj):
+    # type: (Union[T, Tuple[T]]) -> Tuple[T]
+    """ try to wrap a object into len==1 tuple """
+    if isinstance(obj, tuple):
+        return obj
+
+    return obj,  # NOTE the comma, made into tuple
