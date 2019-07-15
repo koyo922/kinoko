@@ -4,7 +4,7 @@
 """
 一些基础通用的文本工具
 
-Authors: qianweishuo<qianweishuo@baidu.com>
+Authors: qianweishuo<qzy922@gmail.com>
 Date:    2019/7/9 上午10:00
 """
 from __future__ import unicode_literals, print_function

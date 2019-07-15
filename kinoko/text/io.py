@@ -9,6 +9,7 @@ Date:    2019/6/27 下午11:20
 """
 from __future__ import absolute_import, unicode_literals
 
+import json
 import subprocess
 from io import open
 import sys
@@ -92,3 +93,8 @@ def n_lines(file_path):
         return None
     num = subprocess.check_output(['wc', '-l', file_path]).decode('utf8')
     return int(num.strip().split(' ')[0])
+
+
+def dump_utf8(obj, indent=None):
+    """ json dump without ensure_ascii """
+    return json.dumps(obj, ensure_ascii=False, indent=indent)
