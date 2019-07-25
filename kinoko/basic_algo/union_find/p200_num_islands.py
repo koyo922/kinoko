@@ -37,10 +37,15 @@ class UnionFind(object):
         self.root = {p: p for p in points}
 
     def find(self, p):
+        # 沿途收集所有路劲上的节点
+        path = []
         while p != self.root[p]:  # 注意 需要while找到真正的根
-            # 未必能保障绝对扁平，只是尽量扁平化，但是p一定找到了自己的根
-            self.root[p] = p = self.root[self.root[p]]
-        assert p == self.root[p]  # 如果上面的while改成if，这里会抛异常
+            path.append(p)
+            p = self.root[p]
+        for e in path:  # 将沿途点都直接指向根
+            self.root[e] = p
+        # 上述标准写法的效率跟 近似写法差不多
+        # while p != self.root[p]; self.root[p] = p = self.root[self.root[p]]
         return p
 
     def union(self, p, q, callback=None):
