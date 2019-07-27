@@ -30,6 +30,7 @@
 Authors: qianweishuo<qzy922@gmail.com>
 Date:    2019/7/25 下午10:42
 """
+from collections import deque
 
 
 class UnionFind(object):
@@ -57,20 +58,34 @@ class UnionFind(object):
 
 class Solution(object):
 
-    def dfs_floodfill(self, grid):
+    def floodfill(self, grid):
         if not grid or not grid[0]:  # 空的边界情况
             return 0
         m, n = len(grid), len(grid[0])
 
-        def sink(i, j):
+        def sink_dfs(i, j):
             if 0 <= i < m and 0 <= j < n and grid[i][j] == '1':
                 grid[i][j] = '0'  # 注意 这里不要忘记
                 # py3要再套一层tuple, lazy-map; 注意两个参数的写法
-                map(sink, (i - 1, i + 1, i, i), (j, j, j - 1, j + 1))
+                map(sink_dfs, (i - 1, i + 1, i, i), (j, j, j - 1, j + 1))
                 return 1
             return 0
 
-        return sum(sink(i, j) for i in range(m) for j in range(n))
+        def sink_bfs(i, j):
+            if not (0 <= i < m and 0 <= j < n and grid[i][j] == '1'):
+                return 0
+            grid[i][j] = '0'  # 注意入队之前处理干净
+            queue = deque([(i, j)])
+            while queue:
+                ni, nj = queue.popleft()
+                for x, y in ((ni + 1, nj), (ni - 1, nj), (ni, nj + 1), (ni, nj - 1)):
+                    if 0 <= x < m and 0 <= y < n and grid[x][y] == '1':
+                        grid[x][y] = '0'
+                        queue.append((x, y))
+            return 1
+
+        # return sum(sink_dfs(i, j) for i in range(m) for j in range(n))
+        return sum(sink_bfs(i, j) for i in range(m) for j in range(n))
 
     def using_UF(self, grid):
         if not grid or not grid[0]:  # 空的边界情况
