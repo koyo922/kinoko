@@ -7,8 +7,11 @@ Date:    2019/6/27 下午11:20
 """
 from __future__ import unicode_literals
 
+import os
+
 import pytest
 
+from kinoko.misc.network.proxy import proxing, DEFAULT_HTTP_PROXY
 from kinoko.misc.network.reachability import JINGDONG_REACHABLE
 from kinoko.text.io import file_wrapper
 
@@ -45,3 +48,13 @@ def test_chase_url_cli(tmp_path):
                                                              tgt_url=None if len(j) == 0 else j[-1])
                       for u, j in url_jumps]
     assert expected_lines == list(file_wrapper(out_path))
+
+
+def test_proxing():
+    old_http, old_https = 'http://old', 'https://old'
+    os.environ['HTTP_PROXY'], os.environ['HTTPS_PROXY'] = old_http, old_https
+    with proxing():  # default
+        assert os.environ['HTTP_PROXY'] == os.environ['HTTPS_PROXY'] == DEFAULT_HTTP_PROXY
+    with proxing('http://dummy'):
+        assert os.environ['HTTP_PROXY'] == os.environ['HTTPS_PROXY'] == 'http://dummy'
+    assert (os.environ['HTTP_PROXY'], os.environ['HTTPS_PROXY']) == (old_http, old_https)
