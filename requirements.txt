@@ -1,3 +1,4 @@
+scikit-learn
 arrow
 codecov
 docopt
@@ -10,6 +11,7 @@ pyfunctional
 pymdown-extensions
 pytest>=4.6.3
 pytest-cov
+pytest-mock
 redo
 requests
 six
