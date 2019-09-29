@@ -95,7 +95,7 @@ def test_patch_function_of_obj(mocker):
 
 def test_spy(mocker):
     mocker.spy(os, 'listdir')
-    print(os.listdir('/'))  # 用`-s`选项看命令行输出 PYTHONPATH=. pytest -s -vv ./tests/test_demo.py
+    print(os.listdir('/')[:5])  # 用`-s`选项看命令行输出 PYTHONPATH=. pytest -s -vv ./tests/test_demo.py
     assert os.listdir.called
 
 

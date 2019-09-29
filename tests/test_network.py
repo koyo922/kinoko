@@ -47,11 +47,16 @@ def mock_head(url, timeout=None):
         raise ValueError('unexpected url: ' + url)
 
 
+def mute_fast(mocker):
+    mocker.patch('sys.stdout.write')  # avoid too much output when using `pytest -s`
+    mocker.patch('sys.stderr.write')
+    mocker.patch('time.sleep', side_effect=lambda _: sleep(0.0001))
+
+
 @pytest.mark.parametrize("url, jumps", url_jumps)
 def test_chase(url, jumps, mocker):
     """ 测试chase_redirection的逻辑，包括异常 """
     mocker.patch.object(requests, 'head', mock_head)
-    mocker.patch('time.sleep', side_effect=lambda _: sleep(0.1))
 
     try:
         all_jumps = chase(url, max_depth=3)
@@ -61,10 +66,8 @@ def test_chase(url, jumps, mocker):
 
 
 def test_chase_redirection_exceptions(mocker):
-    mocker.patch('sys.stdout.write')  # avoid too much output when using `pytest -s`
-    mocker.patch('sys.stderr.write')
+    mute_fast(mocker)
     mocker.patch.object(requests, 'head', return_value=Mock(status_code=911))
-    mocker.patch('time.sleep', side_effect=lambda _: sleep(0.1))
     with pytest.raises(UnexpectedHttpStatus) as ex:
         chase('dummy_url', max_depth=3)
         assert ex.http_status == 911
@@ -82,8 +85,7 @@ def test_chase_redirection_exceptions(mocker):
 
 def test_chase_url_cli(tmp_path, mocker):
     """ 测试命令行工具 """
-    mocker.patch('sys.stderr.write')
-    mocker.patch('time.sleep', side_effect=lambda _: sleep(0.1))
+    mute_fast(mocker)
     in_path = (tmp_path / 'urllist').as_posix()
     with file_wrapper(in_path, 'wt') as f:
         f.writelines([u + '\n' for u, t in url_jumps])
@@ -96,9 +98,10 @@ def test_chase_url_cli(tmp_path, mocker):
     assert expected_lines == list(file_wrapper(out_path))
 
 
-def test_proxing():
+def test_proxing(mocker):
     old_http, old_https = 'http://old', 'https://old'
-    os.environ['HTTP_PROXY'], os.environ['HTTPS_PROXY'] = old_http, old_https
+
+    mocker.patch.object(os, 'environ', new={'HTTP_PROXY': old_http, 'HTTPS_PROXY': old_https})
     with proxing():  # default
         assert os.environ['HTTP_PROXY'] == os.environ['HTTPS_PROXY'] == DEFAULT_HTTP_PROXY
     with proxing('http://dummy'):

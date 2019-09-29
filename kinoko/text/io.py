@@ -97,4 +97,4 @@ def n_lines(file_path):
 
 def dump_utf8(obj, indent=None):
     """ json dump without ensure_ascii """
-    return json.dumps(obj, ensure_ascii=False, indent=indent)
+    return json.dumps(obj, ensure_ascii=False, indent=indent, sort_keys=True)
