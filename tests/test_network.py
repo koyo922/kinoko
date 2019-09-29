@@ -8,13 +8,14 @@ Date:    2019/6/27 下午11:20
 from __future__ import unicode_literals
 
 import os
+from time import sleep
 from typing import Text
 
 import pytest
 import requests
 import six
 
-from kinoko.misc.network.chase_redirection import (chase_url_cli, chase_redirection, ChaseError,
+from kinoko.misc.network.chase_redirection import (chase_url_cli, chase, ChaseError,
                                                    UnexpectedHttpStatus, DepthOverflow)
 from kinoko.misc.network.proxy import proxing, DEFAULT_HTTP_PROXY
 from kinoko.text.io import file_wrapper
@@ -47,21 +48,25 @@ def mock_head(url, timeout=None):
 
 
 @pytest.mark.parametrize("url, jumps", url_jumps)
-def test_chase_redirection(url, jumps, mocker):
+def test_chase(url, jumps, mocker):
     """ 测试chase_redirection的逻辑，包括异常 """
     mocker.patch.object(requests, 'head', mock_head)
+    mocker.patch('time.sleep', side_effect=lambda _: sleep(0.1))
 
     try:
-        all_jumps = chase_redirection(url, max_depth=3)
+        all_jumps = chase(url, max_depth=3)
     except ChaseError:
         all_jumps = []
     assert jumps == all_jumps
 
 
 def test_chase_redirection_exceptions(mocker):
+    mocker.patch('sys.stdout.write')  # avoid too much output when using `pytest -s`
+    mocker.patch('sys.stderr.write')
     mocker.patch.object(requests, 'head', return_value=Mock(status_code=911))
+    mocker.patch('time.sleep', side_effect=lambda _: sleep(0.1))
     with pytest.raises(UnexpectedHttpStatus) as ex:
-        chase_redirection('dummy_url', max_depth=3)
+        chase('dummy_url', max_depth=3)
         assert ex.http_status == 911
 
     # noinspection PyUnusedLocal
@@ -71,12 +76,14 @@ def test_chase_redirection_exceptions(mocker):
 
     mocker.patch.object(requests, 'head', side_effect=mock_head_10)
     with pytest.raises(DepthOverflow) as ex:
-        chase_redirection('1', max_depth=5)
+        chase('1', max_depth=5)
         assert ex.url == '5'
 
 
-def test_chase_url_cli(tmp_path):
+def test_chase_url_cli(tmp_path, mocker):
     """ 测试命令行工具 """
+    mocker.patch('sys.stderr.write')
+    mocker.patch('time.sleep', side_effect=lambda _: sleep(0.1))
     in_path = (tmp_path / 'urllist').as_posix()
     with file_wrapper(in_path, 'wt') as f:
         f.writelines([u + '\n' for u, t in url_jumps])
