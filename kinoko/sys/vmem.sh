@@ -1,23 +1,33 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -e
 
 # Author: qianweishuo
 # Date: 2019/06/14
 # Brief:
-#   script for adding virtual memory
+#   script for adding/removing virtual memory
 # Globals:
 #   None
 # Arguments:
-#   1:size in GigaBytes. default: 64 GB
-#   2:swap file path. default: ${HOME}/swap
+#   action, size, swap_file; see definition below
 # Returns:
 #   succ:0
 #   fail:other
 
-function usage(){
-    echo 'e.g.'
-    echo 'vmem.sh -a on -s 64 -f /home/work/swap'
-}
+if [[ $(uname -s) != 'Linux' ]]; then
+    colormsg 'only support Linux now' FAIL
+    exit 1
+fi
+
+# put `.pyenv/.../bin` before `.pyenv/shims`
+export PATH=$(python -c 'from distutils.sysconfig import EXEC_PREFIX as p; print(p + "/bin")'):$PATH
+# `pip install` has already written something alike into `~/.bashrc`, but may not effect instantly
+source $(which optparse.bash)
+
+# optparse usage: https://github.com/nk412/optparse
+optparse.define short=a long=action desc="action for turning on/off the vmem" variable=ACTION
+optparse.define short=s long=size desc="size of the swap file in GB" variable=SIZE default=64
+optparse.define short=f long=path desc="absolute path of the swap file" variable=SWAP_FILE default=$HOME/swap
+source $(optparse.build)
 
 #######################################
 # Brief:
@@ -52,6 +62,16 @@ function on(){
 }
 
 
+#######################################
+# Brief:
+#   turn off swap file
+# Globals:
+#   SWAP_FILE
+# Arguments:
+#   None
+# Returns:
+#   None
+#######################################
 function off(){
     if sudo -v; then
         # unmount the swap file
@@ -65,32 +85,6 @@ function off(){
 }
 
 function main(){
-    ARGS=`getopt -o a:s:f: -l action:,size:,file -- "$@"`
-    eval set -- "${ARGS}" # without the `eval` extra single quotes appear around each argument value
-    while true
-    do
-        case "$1" in
-        -a|--action)
-            ACTION="$2"; shift
-            ;;
-        -s|--size)
-            SIZE=${2:-64}; shift
-            ;;
-        -f|--file)
-            SWAP_FILE=${2:-/home/work/swap}; shift
-            ;;
-        -h|--help)
-            usage
-            ;;
-        --)
-            shift; break
-            ;;
-        esac
-        shift
-    done
-
-    #    echo $ACTION $SIZE $SWAP_FILE
-    #    echo 'remaining args:' $@
     if [[ ${ACTION} = 'on' ]]; then
         on
     else
