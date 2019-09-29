@@ -30,7 +30,9 @@ def test_patch_tsv(tmp_path):
     with file_wrapper(input_path, mode='wt') as f:
         f.writelines(['field1\tfield2\t角色\tjiaose\tfield4\n',
                       'field1\t field2\t角色\tjiaose\tfield4\n',  # field2 开头多一个空格，替换后要保留
-                      'field1\tfield2\t色情词\txxx\tfield4\n'])
+                      'field1\tfield2\t色情词\txxx\tfield4\n',
+                      'field1\tfield2\tOOV\txxx\tfield4\n',  # left intact
+                      ])
 
     out_path = (tmp_path / 'out').as_posix()
     patch_tsv.main(['-r', ref_path,
@@ -39,7 +41,8 @@ def test_patch_tsv(tmp_path):
                     '-k', '3', '2', '-v', '3'
                     ])
     assert tuple(file_wrapper(out_path)) == ('field1\tfield2\t角色\tjuese\tfield4\n',
-                                             'field1\t field2\t角色\tjuese\tfield4\n',)
+                                             'field1\t field2\t角色\tjuese\tfield4\n',
+                                             'field1\tfield2\tOOV\txxx\tfield4\n')  # left intact
 
 
 def test_agg_tsv(tmp_path, capsys):

@@ -17,10 +17,11 @@ import sys
 import six
 import tqdm
 
-try:
-    from pathlib2 import Path
-except ImportError:
+if six.PY3:  # pragma: no cover
     from pathlib import Path
+else:  # pragma: no cover
+    # noinspection PyUnresolvedReferences
+    from pathlib2 import Path
 
 
 def ensure_text(s, encoding='utf8'):
@@ -73,7 +74,7 @@ def file_wrapper(path='/dev/stdin', mode=None, with_lineno=False, desc=None, **o
         mode = mode or 'wt'
         if 'pytest' in sys.modules:  # py.test框架会patch & 捕获 stdout/stderr
             f = sys.stdout if path.endswith('stdout') else sys.stderr
-        else:
+        else:  # pragma: no cover
             fd = sys.stdout.fileno() if path.endswith('stdout') else sys.stderr.fileno()
             f = open(fd, mode=mode, **open_kwargs)
     else:
@@ -89,7 +90,8 @@ def file_wrapper(path='/dev/stdin', mode=None, with_lineno=False, desc=None, **o
 
 def n_lines(file_path):
     """ 数文件的行数 """
-    if file_path == '/dev/stdin' or file_path.startswith('/dev/fd/'):  # 不要对管道统计行数（否则会耗尽内容）
+    # 不要对管道统计行数（否则会耗尽内容）
+    if file_path == '/dev/stdin' or file_path.startswith('/dev/fd/'):  # pragma: no cover
         return None
     num = subprocess.check_output(['wc', '-l', file_path]).decode('utf8')
     return int(num.strip().split(' ')[0])
