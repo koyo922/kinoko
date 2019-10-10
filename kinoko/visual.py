@@ -13,8 +13,5 @@ from contextlib import contextmanager
 
 @contextmanager
 def pd_showing_detail(max_cols=10, max_colwidth=800):
-    try:
-        with pd.option_context('display.max_columns', max_cols, 'max_colwidth', max_colwidth):
-            yield
-    finally:
-        pass
+    with pd.option_context('display.max_columns', max_cols, 'max_colwidth', max_colwidth):
+        yield
