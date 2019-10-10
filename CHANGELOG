@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
 - pandas display more columns/col_width
+- test speed up
 
 1.1.0 - 2019-09-29
 ---

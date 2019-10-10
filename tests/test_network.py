@@ -48,8 +48,9 @@ def mock_head(url, timeout=None):
 
 
 def mute_fast(mocker):
-    mocker.patch('sys.stdout.write')  # avoid too much output when using `pytest -s`
-    mocker.patch('sys.stderr.write')
+    if six.PY3:
+        mocker.patch('sys.stdout.write')  # avoid too much output when using `pytest -s`
+        mocker.patch('sys.stderr.write')
     mocker.patch('time.sleep', side_effect=lambda _: sleep(0.0001))
 
 
@@ -57,6 +58,8 @@ def mute_fast(mocker):
 def test_chase(url, jumps, mocker):
     """ 测试chase_redirection的逻辑，包括异常 """
     mocker.patch.object(requests, 'head', mock_head)
+    mocker.patch('time.sleep')  # do not really sleep during test
+    # or we can modify the sleeptime to zero; chase.__closure__[2].cell_contents['sleeptime'] = 0
 
     try:
         all_jumps = chase(url, max_depth=3)
@@ -86,6 +89,8 @@ def test_chase_redirection_exceptions(mocker):
 def test_chase_url_cli(tmp_path, mocker):
     """ 测试命令行工具 """
     mute_fast(mocker)
+    mocker.patch.object(requests, 'head', mock_head)
+    mocker.patch('time.sleep')  # do not really sleep during test
     in_path = (tmp_path / 'urllist').as_posix()
     with file_wrapper(in_path, 'wt') as f:
         f.writelines([u + '\n' for u, t in url_jumps])
