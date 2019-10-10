@@ -81,11 +81,11 @@ def try_tuple(obj):
     return obj,  # NOTE the comma, made into tuple
 
 
-def identity(x):
+def identity(x):  # pragma: no cover
     return x
 
 
-def dummy_fn(*args, **kwargs):
+def dummy_fn(*args, **kwargs):  # pragma: no cover
     pass
 
 
