@@ -31,7 +31,7 @@ from __future__ import unicode_literals
 from typing import Text
 from kinoko.misc.web import RESTful # 1. import the decorator
 
-@RESTful(port=8004, route='/') # 2. using the decorator to turns ordinary function
+@RESTful(port=8104, route='/') # 2. using the decorator to turns ordinary function
 def introduce(name, friends):
     friends = friends if isinstance(friends, Text) else ', '.join(friends)  # maybe Tuple[Text, ...]
     return '{} has friends: {}'.format(name.upper(), friends)
@@ -42,9 +42,9 @@ introduce.serve() # 3. start listening
 Client side:
 
 ```bash
-$ curl 'http://localhost:8004?name=yongqiang' -d 'friends=赵四'
+$ curl 'http://localhost:8104?name=yongqiang' -d 'friends=赵四'
 YONGQIANG has friends: 赵四%
-$ curl 'http://localhost:8004?name=yongqiang' -d 'friends=yutian' -d 'friends=赵四'
+$ curl 'http://localhost:8104?name=yongqiang' -d 'friends=yutian' -d 'friends=赵四'
 YONGQIANG has friends: yutian, 赵四% 
 ```
 
