@@ -65,5 +65,6 @@ nav:
   - Network: network.md
   - Bash Utils: bash.md
   - Functional Utils: func.md
+  - Visual Utils: visual.md
   - Release Notes: changelog.md
   - Format Specimen: format_specimen.md

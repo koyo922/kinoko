@@ -72,6 +72,11 @@ $ echo 'http://www.jingdong.com' | chaseurl -t $'{n_jumps}\t{url}\t{tgt_url}' 2>
 # echo pipe here for simplicity; please use real file in production(which shows proper progress bar)
 ```
 
+Documentation
+---
+Please check https://github.com/koyo922/kinoko/tree/dev
+
+
 Maintainer
 ---
 ### owners
