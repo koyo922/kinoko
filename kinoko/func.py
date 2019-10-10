@@ -9,6 +9,8 @@ Authors: qianweishuo<qzy922@gmail.com>
 Date:    2019/6/27 下午11:20
 """
 from typing import Any, Iterable, Union, TypeVar
+
+import six
 from functional.pipeline import Sequence
 from functional import seq
 
@@ -77,3 +79,15 @@ def try_tuple(obj):
         return obj
 
     return obj,  # NOTE the comma, made into tuple
+
+
+def identity(x):
+    return x
+
+
+def dummy_fn(*args, **kwargs):
+    pass
+
+
+# if not run by `kernprof`, then disable @profile
+profile = six.moves.builtins.__dict__.get('profile', identity)

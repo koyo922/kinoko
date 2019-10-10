@@ -28,8 +28,11 @@ import redo as redo
 import requests
 from typing import Text
 
-from ...text.io import file_wrapper
-from ...misc.log_writer import init_log
+from pathlib import Path
+
+from kinoko.func import profile, dummy_fn
+from kinoko.text.io import file_wrapper
+from kinoko.misc.log_writer import init_log
 
 logger = init_log(__name__)
 
