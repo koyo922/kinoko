@@ -103,3 +103,6 @@ venv.bak/
 .mypy_cache/
 
 .idea
+data
+lb_kim.result
+.swp
