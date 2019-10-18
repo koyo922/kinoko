@@ -250,14 +250,14 @@ class UCR_DTW(object):
                 # LB_Keogh_EC
                 # the start location of the data in query
                 I = idx_p - (Q - 1)
-
-                lb_keogh_ec, cb2 = self.lb_keogh_ec_cumulative(q_norm_dec, q_norm_idx_dec, buf_L[I:], buf_U[I:], C_stat)
+                lb_keogh_ec, cb_ec = self.lb_keogh_ec_cumulative(
+                    q_norm_dec, q_norm_idx_dec, buf_L[I:], buf_U[I:], C_stat)
                 if lb_keogh_ec >= self.best_so_far:
                     prune_keogh_ec += 1
                     continue
 
                 # cumsum cb_eg & cb_ec to use in early abandoning DTW
-                cb = np.cumsum((cb_eg if lb_keogh_ec > lb_keogh_eg else cb2)[::-1])[::-1]
+                cb_joint = np.cumsum((cb_ec if lb_keogh_ec > lb_keogh_eg else cb_eg)[::-1])[::-1]
                 self.early_abandon_dtw(idx_buf, idx_p)
 
                 # reduce obsolute points from sum and sum square,公式(5)的第二项
