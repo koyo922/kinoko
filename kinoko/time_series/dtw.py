@@ -29,6 +29,7 @@ from typing import Sequence, Callable, TypeVar, Iterable, Tuple
 from sklearn.preprocessing import StandardScaler
 
 INF = float('inf')
+NAN = np.nan
 logger = logging.getLogger(__name__)
 
 
@@ -37,6 +38,36 @@ def square_dist_fn(v1, v2):
 
 
 T = TypeVar('T')
+
+
+class MovingStatistics(object):
+    def __init__(self):
+        self.cum_x = 0
+        self.cum_x2 = 0
+        self.n_points = 0
+
+        self.mean = NAN
+        self.std = NAN
+
+    def feed(self, x):
+        self.cum_x += x
+        self.cum_x2 += x ** 2
+        self.n_points += 1
+
+    def drop(self, x):
+        self.cum_x -= x
+        self.cum_x2 -= x ** 2
+        self.n_points -= 1
+
+    def mv_mean(self):
+        return self.cum_x / self.n_points
+
+    def mv_std(self):
+        return np.sqrt(self.cum_x2 / self.n_points - self.mv_mean() ** 2)
+
+    def snapshot(self):
+        self.mean = self.mv_mean()
+        self.std = self.mv_std()
 
 
 class UCR_DTW(object):
@@ -172,7 +203,7 @@ class UCR_DTW(object):
             buf_L, buf_U = self.lower_upper_lemire(self.buffer, r=window_size)  # LB_Keogh_EC lower bound计算
 
             # start calculating online z-norm for points in buffer
-            cum_p, cum_p2 = 0, 0
+            C_stat = MovingStatistics()
             best_so_far = INF
             # pruning counters for each phase
             prune_kim = 0
@@ -181,9 +212,8 @@ class UCR_DTW(object):
             # C is a circular array for keeping current content region; double size for avoiding "%" operator
             C = np.zeros(Q * 2)  # candidate C sequence
 
-            for idx_p, p in enumerate(buffer):
-                cum_p += p
-                cum_p2 += p * p
+            for idx_p, p in enumerate(self.buffer):
+                C_stat.feed(p)
                 C[(idx_p % Q) + Q] = C[idx_p % Q] = p
                 if idx_p < Q - 1:
                     continue
@@ -191,7 +221,7 @@ class UCR_DTW(object):
                 i = (idx_p + 1) % Q  # index in C
 
                 # LB_KimFL
-                C_mean, C_std = self.get_mean_std(cum_p, cum_p2)  # NOTE: cum_x will drop obsolete points behind C
+                C_stat.snapshot()
                 lb_kim = self.lb_kim_hierarchy(C, q_norm, i, C_mean, C_std, best_so_far)
                 logger.debug("lb_kim:%f best_so_far:%f", lb_kim, self.bsf)
                 # 级联lower bound策略
@@ -255,12 +285,6 @@ class UCR_DTW(object):
         # fill the rest of buffer, as much as possible
         self.buffer += seq(content).take(self.reset_period - len(self.buffer)).to_list()
         return len(self.buffer)
-
-    def get_mean_std(self, cum_x, cum_x2):
-        Q = len(cum_x)
-        mean = cum_x / Q
-        std = math.sqrt(cum_x2 / Q - mean * mean)
-        return mean, std
 
     def early_abandon_dtw(self, idx_buf, i):
         # compute DTW and early abandoning if possible
