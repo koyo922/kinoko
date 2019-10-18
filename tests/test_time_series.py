@@ -13,7 +13,7 @@ import pytest
 
 from kinoko.time_series.dtw import UCR_DTW, square_dist_fn
 
-ucr_dtw = UCR_DTW(return_square=False, dist_cb=square_dist_fn)
+ucr_dtw = UCR_DTW(dist_cb=square_dist_fn)
 
 x = np.linspace(0, 50, 100)
 ts1 = pd.Series(3.1 * np.sin(x / 1.5) + 3.5)
@@ -42,9 +42,11 @@ def _FastDTWDistance(s1, s2, w):
 
 @pytest.mark.parametrize("content, query", [(ts1, ts2), (ts1, ts3)])
 def test_dtw_distance(content, query):
-    assert (_FastDTWDistance(content, query, 10) ==
-            ucr_dtw.dtw_distance(content, query, max_stray=10, use_rolling=True) ==
-            ucr_dtw.dtw_distance(content, query, max_stray=10, use_rolling=False))
+    assert (pytest.approx(_FastDTWDistance(content, query, 10) ** 2) ==
+            ucr_dtw.dtw_distance(content, query, max_stray=10, rolling_level=0) ==
+            ucr_dtw.dtw_distance(content, query, max_stray=10, rolling_level=1) ==
+            ucr_dtw.dtw_distance(content, query, max_stray=10, rolling_level=2)
+            )
 
 
 def _LB_Keogh(s1, s2, r):

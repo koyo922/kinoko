@@ -16,24 +16,19 @@ Date:    2019/10/17 下午2:27
 
 from __future__ import unicode_literals, division, print_function
 
-import math
-import logging
-
-import itertools
 import numpy as np
-import time
-from six.moves import zip as zip
-from six.moves import map as map
-
 from functional import seq
 from scipy.sparse import dok_matrix
+from six.moves import map as map
+from six.moves import zip as zip
+from sklearn.preprocessing import StandardScaler
 from typing import Sequence, Callable, TypeVar, Iterable, Tuple
 
-from sklearn.preprocessing import StandardScaler
+from kinoko.misc.log_writer import init_log
 
 INF = float('inf')
 NAN = np.nan
-logger = logging.getLogger(__name__)
+logger = init_log(__name__)
 
 
 def square_dist_fn(v1, v2):
@@ -81,13 +76,11 @@ class MovingStatistics(object):
 
 
 class UCR_DTW(object):
-    def __init__(self, return_square=True, dist_cb=square_dist_fn, window_frac=0.05):
-        # type: (bool, bool, Callable[[T, T], float]) -> None
+    def __init__(self, dist_cb=square_dist_fn, window_frac=0.05):
+        # type: (Callable[[T, T], float]) -> None
         """
-        :param return_square: whether to return the squared version of DTW distance
         :param dist_cb: callback function to calculate distance two elements of type `T`
         """
-        self.return_square = return_square
         self.dist_cb = dist_cb
         self.window_frac = window_frac  # type: float
         self.best_so_far = INF
@@ -106,8 +99,8 @@ class UCR_DTW(object):
         self.u_buff = [0.0] * self.reset_period
         self.l_buff = [0.0] * self.reset_period
 
-    def dtw_distance(self, content, query, max_stray=None, cb_backcum=None, use_rolling=True):
-        # type: (Sequence[T], Sequence[T], int, np.ndarray, bool) -> float
+    def dtw_distance(self, content, query, max_stray=None, cb_backcum=None, rolling_level=2):
+        # type: (Sequence[T], Sequence[T], int, np.ndarray, int) -> float
         """
         calculate the DTW distance between two sequences: `content` & `query`
 
@@ -118,7 +111,7 @@ class UCR_DTW(object):
         :param cb_backcum: current_lower_bound which is cumsum'ed backward;
                            approximates the lower bound of `dtw_cost(current_position -> north_east_corner)`.
                            qv. Figure 6, right subplot in the KDD paper.
-        :param use_rolling: whether to use DP rolling trick for memory-optimization
+        :param rolling_level: level of DP rolling trick for memory-optimization
         :return: DTW distance
         """
         C, Q = len(content), len(query)
@@ -130,7 +123,34 @@ class UCR_DTW(object):
         if cb_backcum is not None:
             assert len(content) == len(query), 'len(content) != len(query), `cb` should be None'
 
-        if not use_rolling:  # naive version, for easy understanding
+        def early_abandon_by_cb_backcum(i, mc):  # inner function to save arguments
+            """
+            Consider a "higher"(northern) point, say `(x, y)` where x > i;
+            whose DP path cost consists of two parts:
+
+            1. `(0,0) --> (x,y)`
+            2. `(x,y) --> (C-1,Q-1)`
+
+            For the first part, define `min_cost(x)` as `min(dp[x,:])`.
+            Since cost is mono-increasing w.r.t. row index, and `x > i`;
+            we known that `min_cost(x) >= min_cost(i)`
+
+            For the second part, just use `cb_backcum` as a lower bound, read Figure 6 in KDD paper for detail.
+            we deduce that cost of `(x,y) --> (C-1,Q-1)` >= cb_backcum[x]
+
+            Put it together, we conclude that:
+               cost( (0,0) -> (x,y) -> (C-1, Q-1) )
+            =  cost( (0,0) -> (x,y) )                  +   cost( (x,y) -> (C-1, Q-1) )
+            >= min(dp[x,:])                            +   cb_backcum(x)
+            >= min(dp[i,:])                            +   cb_backcum(x)
+            """
+            x = i + max_stray + 1  # take `x` as large as possibly allowed, for "earlier" abandon
+            if cb_backcum is not None and x < C and mc + cb_backcum[x] >= self.best_so_far:
+                return mc + cb_backcum[x]
+            else:
+                return None
+
+        if rolling_level == 0:  # naive version, for easy understanding; O(C*Q) space
             # dp[i, j] defined as: DTW_distance between content[:i+1] & query[:j+1], excluding right bound
             dp = dok_matrix((C, Q), dtype=float)
             for i in range(C):
@@ -151,39 +171,16 @@ class UCR_DTW(object):
                     dp[i, j] = base + self.dist_cb(content[i], query[j])
                     mc = min(mc, dp[i, j])
 
-                # we can abandon early if the current cummulative distance with lower bound together are larger than bsf
-                if cb_backcum is None:
-                    continue
-                """
-                Consider a "higher"(northern) point, say `(x, y)` where x > i;
-                whose DP path cost consists of two parts:
-                
-                1. `(0,0) --> (x,y)`
-                2. `(x,y) --> (C-1,Q-1)`
-                
-                For the first part, define `min_cost(x)` as `min(dp[x,:])`.
-                Since cost is mono-increasing w.r.t. row index, and `x > i`;
-                we known that `min_cost(x) >= min_cost(i)`
-                
-                For the second part, just use `cb_backcum` as a lower bound, read Figure 6 in KDD paper for detail.
-                we deduce that cost of `(x,y) --> (C-1,Q-1)` >= cb_backcum[x]
-                
-                Put it together, we conclude that:
-                   cost( (0,0) -> (x,y) -> (C-1, Q-1) )
-                =  cost( (0,0) -> (x,y) )                  +   cost( (x,y) -> (C-1, Q-1) )
-                >= min(dp[x,:])                            +   cb_backcum(x)
-                >= min(dp[i,:])                            +   cb_backcum(x)
-                """
-                x = i + max_stray  # take `x` as large as possibly allowed, for "earlier" abandon
-                if x < C and mc + cb_backcum[x] >= self.best_so_far:
-                    return mc + cb_backcum[x]
-
-            return dp[-1, -1] if self.return_square else np.sqrt(dp[-1, -1])
-        else:  # better space efficiency
+                r = early_abandon_by_cb_backcum(i, mc)
+                if r is not None:
+                    return r
+            return dp[-1, -1]
+        elif rolling_level == 1:  # O(Q) space
             # rolling DP now defined as: current row of DTW distance
             dp = np.cumsum([self.dist_cb(content[0], q) if j <= max_stray else INF
                             for j, q in enumerate(query)])
             for i in range(1, C):  # starting from the second row, and goes north
+                mc = INF  # see above `rolling_level == 0` case
                 for j in range(Q):  # going east
                     if not i - max_stray <= j <= i + max_stray:
                         # keep current state of `dp[j]` as south_west for next j
@@ -201,8 +198,44 @@ class UCR_DTW(object):
                     # - before modification (see below): `dp[j] = base + ...`
                     south_west = dp[j]
                     dp[j] = base + self.dist_cb(content[i], query[j])  # we can modify it now, after keeping
+                    mc = min(mc, dp[j])
 
-            return dp[-1] if self.return_square else np.sqrt(dp[-1])
+                r = early_abandon_by_cb_backcum(i, mc)
+                if r is not None:
+                    return r
+            return dp[-1]
+        elif rolling_level == 2:  # O(max_stray) space
+            # when calculating cell (i,j), we only need last row's cache of `[i-1, j-max_stray: j+max_stray+1]`
+            # thus, achieving O(max_stray) space
+            # IT IS NOT REALLY INTUITIVE; PLEASE READ C-CODE BELOW FOR DETAIL
+            # https://github.com/klon/ucrdtw/blob/afc6ff0ac83746378da8cc493bfb09f259f988ee/src/ucrdtw.c#L281
+            cost = [INF] * (2 * max_stray + 1)
+            cost_prev = [INF] * (2 * max_stray + 1)
+            for i in range(C):
+                k = max(0, max_stray - i)
+                mc = INF
+
+                for j in range(max(0, i - max_stray), min(Q, i + max_stray + 1)):
+                    if i == j == 0:
+                        base = 0
+                    else:
+                        u = INF if i - 1 < 0 or k + 1 > 2 * max_stray else cost_prev[k + 1]
+                        v = INF if j - 1 < 0 or k - 1 < 0 else cost[k - 1]
+                        w = INF if i - 1 < 0 or j - 1 < 0 else cost_prev[k]
+                        base = min(u, v, w)
+                    cost[k] = base + self.dist_cb(content[i], query[j])
+                    if cost[k] < mc:
+                        mc = cost[k]
+                    k += 1
+
+                r = early_abandon_by_cb_backcum(i, mc)
+                if r is not None:
+                    return r
+                cost, cost_prev = cost_prev, cost
+            k -= 1
+            return cost_prev[k]
+        else:
+            raise ValueError('invalid value for rolling_level: {}'.format(rolling_level))
 
     def _lb_keogh_ec(self, content, query, window_size):
         # type: (Sequence[T], Sequence[T], int) -> float
@@ -218,7 +251,7 @@ class UCR_DTW(object):
                 LB_sum += self.dist_cb(c, U)
             elif c < L:
                 LB_sum += self.dist_cb(c, L)
-        return LB_sum if self.return_square else np.sqrt(LB_sum)
+        return LB_sum
 
     def lb_keogh_ec(self, content, query, **kwargs):
         return self._lb_keogh_ec(content, query, **kwargs)
@@ -227,7 +260,7 @@ class UCR_DTW(object):
         return self._lb_keogh_ec(content=query, query=content, **kwargs)
 
     def search(self, content, query):
-        # type: (Iterable[T], Sequence[T]) -> Tuple[int, float]
+        # type: (Iterable[T], Sequence[T]) -> Tuple[int, float, dict]
         Q = len(query)
         q_norm = StandardScaler().fit_transform(query[:, None]).flatten()  # z-norm the q
 
@@ -272,6 +305,9 @@ class UCR_DTW(object):
                 # 级联lower bound策略
                 if lb_kim >= self.best_so_far:
                     prune_kim += 1
+                    # reduce obsolute points from sum and sum square
+                    C_stat.drop(C[i])  # recall: `i = (idx_p + 1) % Q` ; circularly map to the left neighbor
+                    # CAUTION: DO NOT FORGET TO `DROP` BEFORE CONTINUE
                     continue
 
                 # LB_Keogh_EQ
@@ -279,6 +315,7 @@ class UCR_DTW(object):
                                                                  q_norm_idx_dec, q_norm_U_dec, q_norm_L_dec)
                 if lb_keogh_eg >= self.best_so_far:
                     prune_keogh_eg += 1
+                    C_stat.drop(C[i])
                     continue
 
                 # z-normalization of t will be computed on the fly
@@ -291,36 +328,37 @@ class UCR_DTW(object):
                     q_norm_dec, q_norm_idx_dec, buf_L[I:], buf_U[I:], C_stat)
                 if lb_keogh_ec >= self.best_so_far:
                     prune_keogh_ec += 1
+                    C_stat.drop(C[i])
                     continue
 
                 # backward cumsum cb_eg & cb_ec to use in early abandoning DTW
                 cb_backcum = np.cumsum((cb_ec if lb_keogh_ec > lb_keogh_eg else cb_eg)[::-1])[::-1]
-                dist = self.dtw_distance(C_norm, q_norm, max_stray=window_size, cb_backcum=cb_backcum,
-                                         use_rolling=False)
+                dist = self.dtw_distance(C_norm, q_norm, max_stray=window_size, cb_backcum=cb_backcum)
+                print(idx_p, round(dist, 8))
                 if dist < self.best_so_far:
                     self.best_so_far = dist
                     self.loc = idx_buf * (self.reset_period - Q + 1) + idx_p - Q + 1
 
-                # reduce obsolute points from sum and sum square,公式(5)的第二项
-                C_stat.drop(C[i])  # recall: `i = (idx_p + 1) % Q` ; circularly map to the left neighbor
+                C_stat.drop(C[i])
 
             if len(self.buffer) < self.reset_period:
                 done = True
             else:
                 idx_buf += 1
 
-            logger.info("#" * 20, idx_buf, len(self.buffer), "#" * 20)
+            logger.info("#################### %d %d ####################", idx_buf, len(self.buffer))
 
         point_scaned = idx_buf * (self.reset_period - Q + 1) + len(self.buffer)
-        logger.info({
-            "Location: ": self.loc,
-            "Distance: ": math.sqrt(self.best_so_far),
-            "Data Scanned: ": point_scaned,
-            "Pruned by LB_Kim": (prune_kim / point_scaned),
-            "Pruned by LB_Keogh": (prune_keogh_eg / point_scaned),
-            "Pruned by LB_Keogh2": (prune_keogh_ec / point_scaned),
-            "DTW Calculation": (point_scaned - prune_kim - prune_keogh_eg - prune_keogh_ec) / point_scaned
-        })
+        result_json = {
+            "location": self.loc,
+            "dtw_distance": np.sqrt(self.best_so_far),
+            "n_scanned: ": point_scaned,
+            "n_prune_kim": prune_kim,
+            "n_prune_keogh_eg": prune_keogh_eg,
+            "n_prune_keogh_ec": prune_keogh_ec,
+            "n_calc_dtw": (point_scaned - prune_kim - prune_keogh_eg - prune_keogh_ec)
+        }
+        return self.loc, np.sqrt(self.best_so_far), result_json
 
     def buffer_init(self, idx_buf, content, Q):
         # use the last `m-1` points if available
@@ -328,24 +366,6 @@ class UCR_DTW(object):
         # fill the rest of buffer, as much as possible
         self.buffer += seq(content).take(self.reset_period - len(self.buffer)).to_list()
         return len(self.buffer)
-
-    def early_abandon_dtw(self, idx_buf, i):
-        # compute DTW and early abandoning if possible
-        dist = self.dtw(self.tz, self.q, self.cb, self.m, self.r, self.bsf)
-        print("dtw-dist:%f best_so_far:%f" % (dist, self.bsf), file=self.result)
-        if dist < self.bsf:
-            # update bsf
-            # loc is the real starting locatin of the nearest neighbor in the file
-            self.bsf = dist
-            self.loc = idx_buf * (self.reset_period - self.m + 1) + i - self.m + 1
-
-    def line_to_float(self, line):
-        return eval(line)
-
-    def sort_query_order(self, query):
-        # type: (np.ndarray) -> np.ndarray
-        """ 对标准化后的Q的所有元素取绝对值，然后对这些时间点的绝对值进行排序，获取对应的时间点索引序列 """
-        return
 
     def lower_upper_lemire(self, s, r):
         # type: (Sequence[T], int) -> Tuple[np.ndarray, np.ndarray]
@@ -472,61 +492,6 @@ class UCR_DTW(object):
             lb += d
             cur_bound[i] = d
         return lb, cur_bound
-
-    def dtw(self, A, B, cb, m, r, bsf=float('inf')):
-        """
-        Calculate Dynamic Time Wrapping distance
-        A,B: data and query
-        cb: cummulative bound used for early abandoning
-        r: size of Sakoe-Chiba warpping band
-        """
-        x, y, z, min_cost = 0.0, 0.0, 0.0, 0.0
-
-        # instead of using matrix of size O(m^2) or O(mr),we will reuse two array of size O(r)
-        cost = [float('inf')] * (2 * r + 1)
-        cost_prev = [float('inf')] * (2 * r + 1)
-        for i in range(m):
-            k = max(0, r - i)
-            min_cost = float('inf')
-
-            for j in range(max(0, i - r), min(m - 1, i + r) + 1):
-                # Initialize all row and column
-                if i == 0 and j == 0:
-                    cost[k] = self.dist_cb(A[0], B[0])
-                    min_cost = cost[k]
-                    k += 1
-                    continue
-
-                if j - 1 < 0 or k - 1 < 0:
-                    y = float('inf')
-                else:
-                    y = cost[k - 1]
-                if i - 1 < 0 or k + 1 > 2 * r:
-                    x = float('inf')
-                else:
-                    if i - 1 < 0 or j - 1 < 0:
-                        z = float('inf')
-                    else:
-                        z = cost_prev[k]
-
-                # Classic DTW calculation
-                cost[k] = min(min(x, y), z) + self.dist_cb(A[i], B[j])
-                # Find minimum cost in row for early abandoning(possibly to use column instead of row)
-                if cost[k] < min_cost:
-                    min_cost = cost[k]
-                k += 1
-
-            # we can abandon early if the current cummulative distance with lower bound together are larger than bsf
-            if i + r < m - 1 and min_cost + cb[i + r + 1] >= bsf:
-                return min_cost + cb[i + r + 1]
-
-            # Move current array to previous array
-            cost, cost_prev = cost_prev, cost
-        k -= 1
-
-        # the DTW distance is in the last cell in the matrix of size O(m^2) or at the middle of our array
-        final_dtw = cost_prev[k]
-        return final_dtw
 
 
 if __name__ == '__main__':
