@@ -230,17 +230,15 @@ class UCR_DTW(object):
 
                 # LB_KimFL
                 lb_kim = self.lb_kim_hierarchy(C, i, C_stat, q_norm)
-                logger.debug("lb_kim:%f best_so_far:%f", lb_kim, self.bsf)
                 # 级联lower bound策略
                 if lb_kim >= self.best_so_far:
                     prune_kim += 1
                     continue
 
                 # LB_Keogh_EQ
-                lb_keogh_eg, cb_eg = self.lb_keogh_eg_cumulative(q_norm_idx_dec, C, q_norm_U_dec, q_norm_L_dec, i,
-                                                                 C_mean, C_std, best_so_far)
-                logger.debug("lb_keogh_EG:%f best_so_far:%f", lb_keogh_eg, best_so_far)
-                if lb_keogh_eg < best_so_far:
+                lb_keogh_eg, cb_eg = self.lb_keogh_eg_cumulative(C, i, C_stat,
+                                                                 q_norm_idx_dec, q_norm_U_dec, q_norm_L_dec)
+                if lb_keogh_eg < self.best_so_far:
                     prune_keogh_eg += 1
                     continue
 
@@ -369,7 +367,7 @@ class UCR_DTW(object):
                   self.dist_cb(y2, query[Q - 3]), self.dist_cb(y2, query[Q - 2]), self.dist_cb(y2, query[Q - 1]))
         return lb
 
-    def lb_keogh_eg_cumulative(self, query_argidx, C, C_mean, C_std, i, U_ordered, L_ordered, best_so_far):
+    def lb_keogh_eg_cumulative(self, C, i, C_stat, query_argidx, U_ordered, L_ordered):
         """
         LB_Keogh 1: Create Envelop for the query
         Note that because the query is known, envelop can be created once at the begenining.
@@ -388,13 +386,13 @@ class UCR_DTW(object):
         Q = len(U_ordered)
         # current bound at each position.It will be used later for early abandoning in DTW
         cur_bound = np.zeros(Q)
-        logger.debug("lb_keogh_eg_cumulative:mean=%f;std=%f", C_mean, C_std)
+        logger.debug("lb_keogh_eg_cumulative:mean=%f;std=%f", C_stat.mean, C_stat.std)
 
         for o, u, l in zip(query_argidx, U_ordered, L_ordered):
-            if lb >= best_so_far:
+            if lb >= self.best_so_far:
                 break
 
-            x = (C[i + o] - C_mean) / C_std  # 进行标准化
+            x = C_stat.znorm(C[i + o])
             # 计算重新排序后的Q的lower bound之间的距离
             if x > u:
                 d = self.dist_cb(x, u)
@@ -404,8 +402,6 @@ class UCR_DTW(object):
                 d = 0
             lb += d
             cur_bound[o] = d  # 把每个距离都记录下来，提供给后面Early Abandoning of DTW 使用
-            logger.debug("lb_keogh_cumulative:j=%d;order[i]=%d,q[order[i]]=%f;x=%f;d=%f",
-                         i, o, self.q[o], x, d)
         return lb, cur_bound
 
     def lb_keogh_ec_cumulative(self, order, tz, query_ordered, L_buf, U_buf, mean, std, best_so_far):
