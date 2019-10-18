@@ -69,6 +69,13 @@ class MovingStatistics(object):
         self.mean = self.mv_mean()
         self.std = self.mv_std()
 
+    def znorm(self, *args):
+        # type: (Any) -> Union[float, np.ndarray]
+        if len(args) == 1:
+            return (args[0] - self.mean) / self.std
+        else:
+            return (np.array(args) - self.mean) / self.std
+
 
 class UCR_DTW(object):
     def __init__(self, return_square=True, dist_cb=square_dist_fn, window_frac=0.05):
@@ -80,6 +87,7 @@ class UCR_DTW(object):
         self.return_square = return_square
         self.dist_cb = dist_cb
         self.window_frac = window_frac  # type: float
+        self.best_so_far = INF
 
         """
         for every `reset_period` points, all cummulative values, such as ex(sum),ex2,
@@ -204,7 +212,6 @@ class UCR_DTW(object):
 
             # start calculating online z-norm for points in buffer
             C_stat = MovingStatistics()
-            best_so_far = INF
             # pruning counters for each phase
             prune_kim = 0
             prune_keogh_eg = 0
@@ -218,14 +225,14 @@ class UCR_DTW(object):
                 if idx_p < Q - 1:
                     continue
 
+                C_stat.snapshot()
                 i = (idx_p + 1) % Q  # index in C
 
                 # LB_KimFL
-                C_stat.snapshot()
-                lb_kim = self.lb_kim_hierarchy(C, q_norm, i, C_mean, C_std, best_so_far)
+                lb_kim = self.lb_kim_hierarchy(C, i, C_stat, q_norm)
                 logger.debug("lb_kim:%f best_so_far:%f", lb_kim, self.bsf)
                 # 级联lower bound策略
-                if lb_kim >= best_so_far:
+                if lb_kim >= self.best_so_far:
                     prune_kim += 1
                     continue
 
@@ -318,7 +325,7 @@ class UCR_DTW(object):
             L[j], U[j] = min(region), max(region)
         return L, U
 
-    def lb_kim_hierarchy(self, C, query, i, buf_mean, buf_std, best_so_far=INF):
+    def lb_kim_hierarchy(self, C, i, C_stat, query):
         """
         Usually, LB_Kim take time O(m) for finding top,bottom,first and last
         however, because of z-normalization the top and bottom cannot give significant benefits
@@ -326,43 +333,38 @@ class UCR_DTW(object):
         the prunning power of LB_Kim is non-trivial,especially when the query is not long, say in length 128
 
         :param C: C un-normed
-        :param query: query normed
         :param i: starting index in C
-        :param buf_mean:
-        :param buf_std:
-        :param best_so_far:
+        :param query: query normed
         :return:
         """
-
         Q = len(query)
         # 1 point at front and back
-        x0 = (C[i] - buf_mean) / buf_std
-        y0 = (C[(i + Q - 1)] - buf_mean) / buf_std
+        x0, y0 = C_stat.znorm(C[i], C[(i + Q - 1)])
         lb = self.dist_cb(x0, query[0]) + self.dist_cb(y0, query[Q - 1])
-        if lb >= best_so_far:
+        if lb >= self.best_so_far:
             return lb
 
         # 2 points at front
-        x1 = (C[i + 1] - buf_mean) / buf_std
+        x1 = C_stat.znorm(C[i + 1])
         lb += min(self.dist_cb(x1, query[0]), self.dist_cb(x0, query[1]), self.dist_cb(x1, query[1]))
-        if lb >= best_so_far:
+        if lb >= self.best_so_far:
             return lb
 
         # 2 points at back
-        y1 = (C[(i + Q - 2)] - buf_mean) / buf_std
+        y1 = C_stat.znorm(C[(i + Q - 2)])
         lb += min(self.dist_cb(y1, query[Q - 1]), self.dist_cb(y0, query[Q - 2]), self.dist_cb(y1, query[Q - 2]))
-        if lb >= best_so_far:
+        if lb >= self.best_so_far:
             return lb
 
         # 3 points at front
-        x2 = (C[(i + 2)] - buf_mean) / buf_std
+        x2 = C_stat.znorm(C[(i + 2)])
         lb += min(self.dist_cb(x0, query[2]), self.dist_cb(x1, query[2]),
                   self.dist_cb(x2, query[2]), self.dist_cb(x2, query[1]), self.dist_cb(x2, query[0]))
-        if lb >= best_so_far:
+        if lb >= self.best_so_far:
             return lb
 
         # 3 points at back
-        y2 = (C[(i + Q - 3)] - buf_mean) / buf_std
+        y2 = C_stat.znorm(C[(i + Q - 3)])
         lb += min(self.dist_cb(y0, query[Q - 3]), self.dist_cb(y1, query[Q - 3]),
                   self.dist_cb(y2, query[Q - 3]), self.dist_cb(y2, query[Q - 2]), self.dist_cb(y2, query[Q - 1]))
         return lb
