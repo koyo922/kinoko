@@ -55,7 +55,7 @@ class UCR_DTW(object):
         will be restarted for reducing the floating point error
         """
         self.reset_period = 100000  # for “flush out” any accumulated floating error
-        self.buffer = np.zeros(self.reset_period)
+        self.buffer = []
 
         self.d = None  # distance
         self.ex, self.ex2, self.mean, self.std = 0.0, 0.0, 0.0, 0.0
@@ -154,7 +154,8 @@ class UCR_DTW(object):
         q_norm = StandardScaler().fit_transform(query[:, None]).flatten()  # z-norm the q
 
         # create envelops for normalized query (viz. LB_Keogh_EQ)
-        q_norm_L, q_norm_U = self.lower_upper_lemire(q_norm)
+        window_size = int(Q * self.window_frac)
+        q_norm_L, q_norm_U = self.lower_upper_lemire(q_norm, r=window_size)
         q_norm_idx_dec = q_norm.__abs__().argsort()[::-1]  # decreasing order
         q_norm_dec, q_norm_L_dec, q_norm_U_dec = \
             q_norm[q_norm_idx_dec], q_norm_L[q_norm_idx_dec], q_norm_U[q_norm_idx_dec]
@@ -163,9 +164,12 @@ class UCR_DTW(object):
         done = False
         while not done:
             # fill the buffer with available content
-            buf_size = self.buffer_init(idx_buf, content, Q)
-            if buf_size <= Q - 1:
+            self.buffer_init(idx_buf, content, Q)
+            if len(self.buffer) <= Q - 1:
                 break
+
+            # 这里的buffer并没有进行normalization处理(所以，在lb_keogh_data_cumulative函数中进行标准化处理)，完整求出整个chunk中的lower bound
+            buf_L, buf_U = self.lower_upper_lemire(self.buffer, r=window_size)  # LB_Keogh_EC lower bound计算
 
             # start calculating online z-norm for points in buffer
             cum_p, cum_p2 = 0, 0
@@ -246,17 +250,11 @@ class UCR_DTW(object):
         })
 
     def buffer_init(self, idx_buf, content, Q):
-        if idx_buf == 0:
-            n_read = 0
-        else:
-            self.buffer[:Q - 1] = self.buffer[-(Q - 1):]  # flip the last `m-1` points to front
-            n_read = Q - 1
-
-        # fill the rest of buffer
-        remaining = seq(content).take(self.reset_period - n_read).to_list()
-        self.buffer[n_read: n_read + len(remaining)] = remaining
-        n_read += len(remaining)
-        return n_read
+        # use the last `m-1` points if available
+        self.buffer = [] if idx_buf == 0 else self.buffer[-(Q - 1):]
+        # fill the rest of buffer, as much as possible
+        self.buffer += seq(content).take(self.reset_period - len(self.buffer)).to_list()
+        return len(self.buffer)
 
     def get_mean_std(self, cum_x, cum_x2):
         Q = len(cum_x)
@@ -282,15 +280,14 @@ class UCR_DTW(object):
         """ 对标准化后的Q的所有元素取绝对值，然后对这些时间点的绝对值进行排序，获取对应的时间点索引序列 """
         return
 
-    def lower_upper_lemire(self, s):
-        # type: (Sequence[T]) -> Tuple[np.ndarray, np.ndarray]
+    def lower_upper_lemire(self, s, r):
+        # type: (Sequence[T], int) -> Tuple[np.ndarray, np.ndarray]
         """
         Finding the envelop of min and max value for LB_Keogh_EQ or EC
         Implementation idea is introducted by Danial Lemire in his paper
         "Faster Retrieval with a Two-Pass Dynamic-Time-Warping Lower Bound",Pattern Recognition 42(9) 2009
         """
         size = len(s)
-        r = int(size * self.window_frac)
         L, U = np.empty(size), np.empty(size)
         for j in range(size):  # should replace loop with vectorization for speed
             region = s[max(j - r, 0): min(j + r, size)]  # CAUTION: `r+1` right open
