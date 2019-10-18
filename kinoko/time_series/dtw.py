@@ -261,20 +261,19 @@ class UCR_DTW(object):
                 self.early_abandon_dtw(idx_buf, idx_p)
 
                 # reduce obsolute points from sum and sum square,公式(5)的第二项
-                cum_p -= C[i]  # recall: i = (idx_p + 1) % Q ; circularly map to the left neighbor
-                cum_p2 -= C[i] ** 2
+                C_stat.drop(C[i])  # recall: `i = (idx_p + 1) % Q` ; circularly map to the left neighbor
 
-            if buf_size < self.reset_period:
+            if len(self.buffer) < self.reset_period:
                 done = True
             else:
                 idx_buf += 1
 
-            logger.info("#" * 20, idx_buf, buf_size, "#" * 20)
+            logger.info("#" * 20, idx_buf, len(self.buffer), "#" * 20)
 
-        point_scaned = idx_buf * (self.reset_period - Q + 1) + buf_size
+        point_scaned = idx_buf * (self.reset_period - Q + 1) + len(self.buffer)
         logger.info({
             "Location: ": self.loc,
-            "Distance: ": math.sqrt(best_so_far),
+            "Distance: ": math.sqrt(self.best_so_far),
             "Data Scanned: ": point_scaned,
             "Pruned by LB_Kim": (prune_kim / point_scaned),
             "Pruned by LB_Keogh": (prune_keogh_eg / point_scaned),
