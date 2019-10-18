@@ -251,15 +251,11 @@ class UCR_DTW(object):
                 # the start location of the data in query
                 I = idx_p - (Q - 1)
 
-                # 这里的buffer并没有进行normalization处理(所以，在lb_keogh_data_cumulative函数中进行标准化处理)，完整求出整个chunk中的lower bound
-                L_buf, U_buf = self.lower_upper_lemire(self.buffer, window_size)  # LB_Keogh_EC 计算
-                lb_keogh_ec, cb2 = self.lb_keogh_ec_cumulative(q_norm_idx_dec, C_norm, q_norm_dec,
-                                                               L_buf[I:], U_buf[I:], C_mean, C_std,
-                                                               best_so_far)
-                logger.debug("lb_keogh_EC:%f best_so_far:%f", lb_keogh_ec, best_so_far)
-                if lb_keogh_ec >= best_so_far:
+                lb_keogh_ec, cb2 = self.lb_keogh_ec_cumulative(q_norm_dec, q_norm_idx_dec, buf_L[I:], buf_U[I:], C_stat)
+                if lb_keogh_ec >= self.best_so_far:
                     prune_keogh_ec += 1
                     continue
+
                 # cumsum cb_eg & cb_ec to use in early abandoning DTW
                 cb = np.cumsum((cb_eg if lb_keogh_ec > lb_keogh_eg else cb2)[::-1])[::-1]
                 self.early_abandon_dtw(idx_buf, idx_p)
@@ -372,7 +368,7 @@ class UCR_DTW(object):
     def lb_keogh_eg_cumulative(self, C, i, C_stat, query_argidx, U_ordered, L_ordered):
         """
         LB_Keogh 1: Create Envelop for the query
-        Note that because the query is known, envelop can be created once at the begenining.
+        Note that because the query is known, envelop can be created once at the beginning.
 
         :param query_argidx: sorted indices for the query
         :param C:
@@ -406,37 +402,35 @@ class UCR_DTW(object):
             cur_bound[o] = d  # 把每个距离都记录下来，提供给后面Early Abandoning of DTW 使用
         return lb, cur_bound
 
-    def lb_keogh_ec_cumulative(self, order, tz, query_ordered, L_buf, U_buf, mean, std, best_so_far):
-        '''
+    def lb_keogh_ec_cumulative(self, q_norm_dec, q_norm_idx_dec, buf_L, buf_U, C_stat):
+        """
         LB_Keogh 2: Create Envelop for the data
         Note that the envelops have bean created (in main function) when each data point has been read.
 
         参数:
             order: 根据标准化后的Q进行的排序对应的index列表
-            tz:Z-normalized C
             qo:sorted query
             cb:（cb2）current bound at each position.Used later for early abandoning in DTW
             l,u:lower and upper envelop of the current data(l_buff,u_buff)
-        '''
+        """
+        Q = len(q_norm_dec)
         lb = 0
-        Q = len(order)
         cur_bound = np.zeros(Q)
 
-        for o, qo in zip(order, query_ordered):
-            if lb >= best_so_far:
+        # CAUTION: reorder beforehand, e.g. `buf_L[q_norm_idx_dec]`
+        for i, q, l, u in zip(q_norm_idx_dec, q_norm_dec, buf_L[q_norm_idx_dec], buf_U[q_norm_idx_dec]):
+            if lb >= self.best_so_far:
                 break
             # z-normalization，对lower bound进行标准化处理(用于应对对chunk中的所有数据进行标准化)
-            U_z = (U_buf[o] - mean) / std
-            L_z = (L_buf[o] - mean) / std
-
-            if qo > U_z:
-                d = self.dist_cb(qo, U_z)
-            elif qo < L_z:
-                d = self.dist_cb(qo, L_z)
+            U_z, L_z = C_stat.znorm(u, l)
+            if q > U_z:
+                d = self.dist_cb(q, U_z)
+            elif q < L_z:
+                d = self.dist_cb(q, L_z)
             else:
                 d = 0
             lb += d
-            cur_bound[o] = d
+            cur_bound[i] = d
         return lb, cur_bound
 
     def dtw(self, A, B, cb, m, r, bsf=float('inf')):
