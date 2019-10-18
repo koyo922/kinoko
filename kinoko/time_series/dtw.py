@@ -38,7 +38,7 @@ T = TypeVar('T')
 
 
 class UCR_DTW(object):
-    def __init__(self, return_square=True, dist_cb=square_dist_fn):
+    def __init__(self, return_square=True, dist_cb=square_dist_fn, window_frac=0.05):
         # type: (bool, bool, Callable[[T, T], float]) -> None
         """
         :param return_square: whether to return the squared version of DTW distance
@@ -46,11 +46,7 @@ class UCR_DTW(object):
         """
         self.return_square = return_square
         self.dist_cb = dist_cb
-
-        self.q = [0] * self.m  # query array
-
-        self.u_d = [None] * self.m
-        self.l_d = [None] * self.m
+        self.window_frac = window_frac  # type: float
 
         """
         for every `reset_period` points, all cummulative values, such as ex(sum),ex2,
@@ -149,15 +145,15 @@ class UCR_DTW(object):
     def lb_keogh_eg(self, content, query, **kwargs):
         return self._lb_keogh_ec(content=query, query=content, **kwargs)
 
-    def search(self, content, query, window_size):
-        # type: (Iterable[T], Sequence[T], int) -> Tuple[int, float]
+    def search(self, content, query):
+        # type: (Iterable[T], Sequence[T]) -> Tuple[int, float]
         Q = len(query)
-        query = StandardScaler().fit_transform(query)  # z-norm the q
+        q_norm = StandardScaler().fit_transform(query[:, None]).flatten()  # z-norm the q
 
         # create envelops for normalized query (viz. LB_Keogh_EQ)
-        QL, QU = self.lower_upper_lemire(query, window_size)
-        query_argidx = self.sort_query_order(query)  # decreasing order
-        query_dec, QL_dec, QU_dec = query[query_argidx], QL[query_argidx], QU[query_argidx]
+        q_norm_L, q_norm_U = self.lower_upper_lemire(q_norm)
+        query_argidx = self.sort_query_order(q_norm)  # decreasing order
+        query_dec, QL_dec, QU_dec = q_norm[query_argidx], q_norm_L[query_argidx], q_norm_U[query_argidx]
 
         idx_buf = 0
         buffer = np.zeros(self.reset_period)
@@ -190,7 +186,7 @@ class UCR_DTW(object):
 
                 # LB_KimFL
                 C_mean, C_std = self.get_mean_std(cum_p, cum_p2)  # NOTE: cum_x will drop obsolete points behind C
-                lb_kim = self.lb_kim_hierarchy(C, query, i, C_mean, C_std, best_so_far)
+                lb_kim = self.lb_kim_hierarchy(C, q_norm, i, C_mean, C_std, best_so_far)
                 logger.debug("lb_kim:%f best_so_far:%f", lb_kim, self.bsf)
                 # 级联lower bound策略
                 if lb_kim >= best_so_far:
@@ -284,18 +280,18 @@ class UCR_DTW(object):
         """ 对标准化后的Q的所有元素取绝对值，然后对这些时间点的绝对值进行排序，获取对应的时间点索引序列 """
         return query.__abs__().argsort()[::-1]
 
-    @staticmethod
-    def lower_upper_lemire(query, window_size):
-        # type: (Sequence[T], int) -> Tuple[np.ndarray, np.ndarray]
+    def lower_upper_lemire(self, s):
+        # type: (Sequence[T]) -> Tuple[np.ndarray, np.ndarray]
         """
-        Finding the envelop of min and max value for LB_Keogh_EQ
+        Finding the envelop of min and max value for LB_Keogh_EQ or EC
         Implementation idea is introducted by Danial Lemire in his paper
         "Faster Retrieval with a Two-Pass Dynamic-Time-Warping Lower Bound",Pattern Recognition 42(9) 2009
         """
-        Q = len(query)
-        L, U = [None] * Q, [] * Q
-        for j, q in enumerate(query):
-            region = query[max(j - window_size, 0): min(j + window_size + 1, Q)]  # CAUTION: `r+1` right open
+        size = len(s)
+        r = int(size * self.window_frac)
+        L, U = np.empty(size), np.empty(size)
+        for j in range(size):  # should replace loop with vectorization for speed
+            region = s[max(j - r, 0): min(j + r, size)]  # CAUTION: `r+1` right open
             L[j], U[j] = min(region), max(region)
         return L, U
 
@@ -474,3 +470,8 @@ class UCR_DTW(object):
         # the DTW distance is in the last cell in the matrix of size O(m^2) or at the middle of our array
         final_dtw = cost_prev[k]
         return final_dtw
+
+
+if __name__ == '__main__':
+    model = UCR_DTW()
+    model.search(content=map(eval, open('data/Data_new.txt')), query=np.loadtxt('data/Query_new.txt'))
