@@ -82,8 +82,8 @@ class MovingStatistics(object):
 
 
 class UCR_DTW(object):
-    # reset_period = 100000  # for “flush out” any accumulated floating error
-    reset_period = 5000  # for “flush out” any accumulated floating error
+    # reset_period = 5000  # for debug
+    reset_period = 100000  # for “flush out” any accumulated floating error
 
     def __init__(self, dist_cb=square_dist_fn, window_frac=0.05):
         # type: (Callable[[T, T], float], float) -> None
@@ -183,6 +183,8 @@ class UCR_DTW(object):
                 C_stat.drop(C[i])
                 logger.debug((idx_buf, idx_p, c, self.best_so_far))
 
+            # if idx_buf >= 2: # for debug
+            #     done = True
             if len(self.buffer) < self.reset_period:
                 done = True
             else:
