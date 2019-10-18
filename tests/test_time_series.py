@@ -47,23 +47,3 @@ def test_dtw_distance(content, query):
             ucr_dtw.dtw_distance(content, query, max_stray=10, rolling_level=1) ==
             ucr_dtw.dtw_distance(content, query, max_stray=10, rolling_level=2)
             )
-
-
-def _LB_Keogh(s1, s2, r):
-    LB_sum = 0
-    for ind, i in enumerate(s1):
-        # 注意右开区间
-        lower_bound = min(s2[(ind - r if ind - r >= 0 else 0):(ind + r + 1 if ind + r < len(s2) else len(s2))])
-        upper_bound = max(s2[(ind - r if ind - r >= 0 else 0):(ind + r + 1 if ind + r < len(s2) else len(s2))])
-
-        if i > upper_bound:
-            LB_sum = LB_sum + (i - upper_bound) ** 2
-        elif i < lower_bound:
-            LB_sum = LB_sum + (i - lower_bound) ** 2
-
-    return np.sqrt(LB_sum)
-
-
-@pytest.mark.parametrize("content, query", [(ts1, ts2), (ts1, ts3)])
-def test_lb_keogh(content, query):
-    assert _LB_Keogh(content, query, 20) == ucr_dtw.lb_keogh_ec(content, query, window_size=20)

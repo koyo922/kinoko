@@ -16,19 +16,22 @@ Date:    2019/10/17 下午2:27
 
 from __future__ import unicode_literals, division, print_function
 
+from collections import Counter
+
+from typing import Sequence, Callable, TypeVar, Iterable, Tuple, Any, Union
 import numpy as np
+from numpy import ndarray
 from functional import seq
 from scipy.sparse import dok_matrix
 from six.moves import map as map
 from six.moves import zip as zip
 from sklearn.preprocessing import StandardScaler
-from typing import Sequence, Callable, TypeVar, Iterable, Tuple
 
 from kinoko.misc.log_writer import init_log
 
 INF = float('inf')
 NAN = np.nan
-logger = init_log(__name__)
+logger = init_log(__name__, level='DEBUG')
 
 
 def square_dist_fn(v1, v2):
@@ -39,13 +42,13 @@ T = TypeVar('T')
 
 
 class MovingStatistics(object):
-    def __init__(self):
+    def __init__(self, mean=NAN, std=NAN):
         self.cum_x = 0
         self.cum_x2 = 0
         self.n_points = 0
 
-        self.mean = NAN
-        self.std = NAN
+        self.mean = mean
+        self.std = std
 
     def feed(self, x):
         self.cum_x += x
@@ -68,7 +71,7 @@ class MovingStatistics(object):
         self.std = self.mv_std()
 
     def znorm(self, *args):
-        # type: (Any) -> Union[float, np.ndarray]
+        # type: (Any) -> Union[float, ndarray]
         if len(args) == 1:
             return (args[0] - self.mean) / self.std
         else:
@@ -76,31 +79,223 @@ class MovingStatistics(object):
 
 
 class UCR_DTW(object):
+    # reset_period = 100000  # for “flush out” any accumulated floating error
+    reset_period = 5000  # for “flush out” any accumulated floating error
+
     def __init__(self, dist_cb=square_dist_fn, window_frac=0.05):
-        # type: (Callable[[T, T], float]) -> None
+        # type: (Callable[[T, T], float], float) -> None
         """
         :param dist_cb: callback function to calculate distance two elements of type `T`
+        :param window_frac: window_size will be calculated by `int(len(query) * window_frac)`
+                            read the KDD-paper chapter 3.1 for Sakoe-Chiba-Band related concepts
         """
         self.dist_cb = dist_cb
         self.window_frac = window_frac  # type: float
+
+        # a few internal states for `search()`
+        self.buffer = []
+        self.loc = None  # type: int
         self.best_so_far = INF
 
+    def search(self, content, query, window_frac=None):
+        # type: (Iterable[T], Sequence[T], Union[float, None]) -> Tuple[int, float, dict]
         """
-        for every `reset_period` points, all cummulative values, such as ex(sum),ex2,
-        will be restarted for reducing the floating point error
+        Search `query` in `content`, find its nearest match period;
+        returning that period's starting index and DTW_distance and running details
+
+        :param content: a sequence of object in type T, which can be used to compute distance by `self.dist_cb()`
+        :param query: a (typically) shorter sequence than content, which need to be searched for
+        :param window_frac: overwrite object variable if needed; see `__init__()` for detail
+        :return: tuple of: location, DTW_distance, running_details_as_dict
         """
-        self.reset_period = 100000  # for “flush out” any accumulated floating error
-        self.buffer = []
+        Q = len(query)
+        self.best_so_far = INF  # reset best cost for a new search
+        q_norm = StandardScaler().fit_transform(query[:, None]).flatten()  # z-norm the q
 
-        self.d = None  # distance
-        self.ex, self.ex2, self.mean, self.std = 0.0, 0.0, 0.0, 0.0
-        self.loc = 0
+        # create envelops for normalized query (viz. LB_Keogh_EQ)
+        window_size = int(Q * (window_frac or self.window_frac))
+        q_norm_L, q_norm_U = self._lower_upper_lemire(q_norm, r=window_size)
+        q_argidx = q_norm.__abs__().argsort()[::-1]  # decreasing order
+        q_norm_dec, q_norm_L_dec, q_norm_U_dec = q_norm[q_argidx], q_norm_L[q_argidx], q_norm_U[q_argidx]
 
-        self.u_buff = [0.0] * self.reset_period
-        self.l_buff = [0.0] * self.reset_period
+        idx_buf = 0
+        done = False
+        while not done:
+            # use the last `m-1` points if available
+            self.buffer = [] if idx_buf == 0 else self.buffer[-(Q - 1):]
+            self.buffer += seq(content).take(self.reset_period - len(self.buffer)).to_list()
+
+            if len(self.buffer) <= Q - 1:
+                break
+
+            C_stat = MovingStatistics()  # start calculating online z-norm for points in buffer
+            prune_cnt = Counter(kim=0, eg=0, ec=0)  # pruning counters for each phase
+            # a circular array for keeping current content region; double size for avoiding "%" operator
+            C = np.zeros(Q * 2)  # candidate C sequence
+
+            for idx_p, p in enumerate(self.buffer):
+                C_stat.feed(p)
+                C[(idx_p % Q) + Q] = C[idx_p % Q] = p
+                if idx_p < Q - 1:
+                    continue
+
+                C_stat.snapshot()
+                i = (idx_p + 1) % Q  # index in C
+
+                # ----- LB_KimFL
+                lb_kim = self._lb_kim_hierarchy(C, i, C_stat, q_norm)
+                if lb_kim >= self.best_so_far:
+                    prune_cnt['kim'] += 1
+                    # reduce obsolute points from sum and sum square
+                    C_stat.drop(C[i])  # recall: `i = (idx_p + 1) % Q` ; circularly map to the left neighbor
+                    continue  # CAUTION: DO NOT FORGET TO `drop` BEFORE `continue`
+
+                # ----- LB_Keogh_EQ
+                lb_keogh_eg, cb_eg = self._lb_keogh_online(C_stat, q_argidx, q_norm_L_dec, q_norm_U_dec, C=C[i:])
+                if lb_keogh_eg >= self.best_so_far:
+                    prune_cnt['eg'] += 1
+                    C_stat.drop(C[i])
+                    continue
+
+                # ----- LB_Keogh_EC
+                idx_in_query = idx_p - (Q - 1)  # start location of the data in `query`
+                buf_L, buf_U = self._lower_upper_lemire(self.buffer, r=window_size)  # LB_Keogh_EC lower bound
+                lb_keogh_ec, cb_ec = self._lb_keogh_online(C_stat, q_argidx,  # CAUTION: keep ordered beforehand
+                                                           buf_L[idx_in_query:][q_argidx],
+                                                           buf_U[idx_in_query:][q_argidx], q_norm=q_norm)
+                if lb_keogh_ec >= self.best_so_far:
+                    prune_cnt['ec'] += 1
+                    C_stat.drop(C[i])
+                    continue
+
+                # ----- DTW
+                # backward cumsum cb_eg & cb_ec to use in early abandoning DTW
+                cb_backcum = np.cumsum((cb_ec if lb_keogh_ec > lb_keogh_eg else cb_eg)[::-1])[::-1]
+                c = self.dtw_distance(C_stat.znorm(C[i:i + Q]), q_norm, max_stray=window_size, cb_backcum=cb_backcum)
+                if c < self.best_so_far:
+                    self.best_so_far = c
+                    self.loc = idx_buf * (self.reset_period - Q + 1) + idx_p - Q + 1
+                C_stat.drop(C[i])
+                logger.debug((idx_buf, idx_p, c, self.best_so_far))
+
+            if len(self.buffer) < self.reset_period:
+                done = True
+            else:
+                idx_buf += 1
+
+            logger.info("#################### %d %d ####################", idx_buf, len(self.buffer))
+
+        n_scanned = idx_buf * (self.reset_period - Q + 1) + len(self.buffer)
+        result_json = {
+            "location": self.loc, "dtw_distance": np.sqrt(self.best_so_far),
+            "n_scanned: ": n_scanned, "n_prunes": prune_cnt, "n_calc_dtw": (n_scanned - sum(prune_cnt.values()))
+        }
+        return self.loc, np.sqrt(self.best_so_far), result_json
+
+    @staticmethod
+    def _lower_upper_lemire(s, r):
+        # type: (Sequence[T], int) -> Tuple[ndarray, ndarray]
+        """
+        Finding the envelop of min and max value for LB_Keogh_EQ or EC
+        Implementation idea is introducted by Danial Lemire in his paper
+        "Faster Retrieval with a Two-Pass Dynamic-Time-Warping Lower Bound",Pattern Recognition 42(9) 2009
+        """
+        size = len(s)
+        L, U = np.empty(size), np.empty(size)
+        for j in range(size):  # should replace loop with vectorization for speed
+            region = s[max(j - r, 0): min(j + r, size)]  # CAUTION: `r+1` right open
+            L[j], U[j] = min(region), max(region)
+        return L, U
+
+    def _lb_kim_hierarchy(self, C, i, C_stat, query):
+        # type: (ndarray, int, MovingStatistics, Sequence[T]) -> float
+        """
+        Usually, LB_Kim take time O(m) for finding top,bottom,first and last
+        however, because of z-normalization the top and bottom cannot give significant benefits
+        and using the first and last points can be computed in constant time
+        the prunning power of LB_Kim is non-trivial,especially when the query is not long, say in length 128
+
+        :param C: C un-normed
+        :param i: starting index in C
+        :param C_stat:
+        :param query: query normed
+        :return:
+        """
+        Q = len(query)
+        # 1 point at front and back
+        x0, y0 = C_stat.znorm(C[i], C[(i + Q - 1)])
+        lb = self.dist_cb(x0, query[0]) + self.dist_cb(y0, query[Q - 1])
+        if lb >= self.best_so_far:
+            return lb
+
+        # 2 points at front
+        x1 = C_stat.znorm(C[i + 1])
+        lb += min(self.dist_cb(x1, query[0]), self.dist_cb(x0, query[1]), self.dist_cb(x1, query[1]))
+        if lb >= self.best_so_far:
+            return lb
+
+        # 2 points at back
+        y1 = C_stat.znorm(C[(i + Q - 2)])
+        lb += min(self.dist_cb(y1, query[Q - 1]), self.dist_cb(y0, query[Q - 2]), self.dist_cb(y1, query[Q - 2]))
+        if lb >= self.best_so_far:
+            return lb
+
+        # 3 points at front
+        x2 = C_stat.znorm(C[(i + 2)])
+        lb += min(self.dist_cb(x0, query[2]), self.dist_cb(x1, query[2]),
+                  self.dist_cb(x2, query[2]), self.dist_cb(x2, query[1]), self.dist_cb(x2, query[0]))
+        if lb >= self.best_so_far:
+            return lb
+
+        # 3 points at back
+        y2 = C_stat.znorm(C[(i + Q - 3)])
+        lb += min(self.dist_cb(y0, query[Q - 3]), self.dist_cb(y1, query[Q - 3]),
+                  self.dist_cb(y2, query[Q - 3]), self.dist_cb(y2, query[Q - 2]), self.dist_cb(y2, query[Q - 1]))
+        return lb
+
+    def _lb_keogh_online(self, C_stat, q_argidx, L, U, C=None, q_norm=None):
+        # type: (MovingStatistics, ndarray, ndarray, ndarray, ndarray, ndarray) -> Tuple[float, ndarray]
+        """
+        LB_Keogh for EG/EC : Create Envelop for the query or data
+
+        :param C_stat: statistical info of C
+        :param q_argidx: pseudo-code: map(abs, query).argidx().reverse()
+        :param L: for "LB_keogh_EG" case, `L` means neighbor_lower_bound for normalized `query`
+                  for "...EC" case, means ... for `buffer` region, un-normed, but reordered by q_argidx
+        :param U: ... upper ...
+        :param C: needed in "EG" case
+        :param q_norm: needed in "EC" case
+        :return: a tuple of: lowest_bound, current_bound_for_each_position
+        """
+        assert not (C is None and q_norm is None), 'C and q_norm should not be None together'
+        lb = 0.0
+        Q = len(U)
+        cb = np.zeros(Q)
+
+        for i, l, u in zip(q_argidx, L, U):
+            if lb >= self.best_so_far:
+                break
+
+            if C is not None:  # EG case
+                x = C_stat.znorm(C[i])  # elements of C need to be normed "on the fly"
+                # `u, l` of query (in EG case) are already normed
+            else:
+                x = q_norm[i]
+                # noinspection PyPep8
+                u, l = C_stat.znorm(u, l)
+
+            if x > u:
+                d = self.dist_cb(x, u)
+            elif x < l:
+                d = self.dist_cb(x, l)
+            else:
+                d = 0
+            lb += d
+            cb[i] = d  # for usage in Early Abandoning of DTW
+        return lb, cb
 
     def dtw_distance(self, content, query, max_stray=None, cb_backcum=None, rolling_level=2):
-        # type: (Sequence[T], Sequence[T], int, np.ndarray, int) -> float
+        # type: (Sequence[T], Sequence[T], int, ndarray, int) -> float
         """
         calculate the DTW distance between two sequences: `content` & `query`
 
@@ -236,262 +431,6 @@ class UCR_DTW(object):
             return cost_prev[k]
         else:
             raise ValueError('invalid value for rolling_level: {}'.format(rolling_level))
-
-    def _lb_keogh_ec(self, content, query, window_size):
-        # type: (Sequence[T], Sequence[T], int) -> float
-        """ using EC here """
-        Q = len(query)
-        LB_sum = 0
-        for i, c in enumerate(content):
-            # NOTE: built-in `min/max` functions were used here JUST FOR BREVITY
-            # should consider `heap` for better performance w.r.t. getting L, U
-            region = query[max(i - window_size, 0): min(i + window_size + 1, Q)]  # CAUTION: range() opens on right
-            L, U = min(region), max(region)
-            if c > U:
-                LB_sum += self.dist_cb(c, U)
-            elif c < L:
-                LB_sum += self.dist_cb(c, L)
-        return LB_sum
-
-    def lb_keogh_ec(self, content, query, **kwargs):
-        return self._lb_keogh_ec(content, query, **kwargs)
-
-    def lb_keogh_eg(self, content, query, **kwargs):
-        return self._lb_keogh_ec(content=query, query=content, **kwargs)
-
-    def search(self, content, query):
-        # type: (Iterable[T], Sequence[T]) -> Tuple[int, float, dict]
-        Q = len(query)
-        q_norm = StandardScaler().fit_transform(query[:, None]).flatten()  # z-norm the q
-
-        # create envelops for normalized query (viz. LB_Keogh_EQ)
-        window_size = int(Q * self.window_frac)
-        q_norm_L, q_norm_U = self.lower_upper_lemire(q_norm, r=window_size)
-        q_norm_idx_dec = q_norm.__abs__().argsort()[::-1]  # decreasing order
-        q_norm_dec, q_norm_L_dec, q_norm_U_dec = \
-            q_norm[q_norm_idx_dec], q_norm_L[q_norm_idx_dec], q_norm_U[q_norm_idx_dec]
-
-        idx_buf = 0
-        done = False
-        while not done:
-            # fill the buffer with available content
-            self.buffer_init(idx_buf, content, Q)
-            if len(self.buffer) <= Q - 1:
-                break
-
-            # 这里的buffer并没有进行normalization处理(所以，在lb_keogh_data_cumulative函数中进行标准化处理)，完整求出整个chunk中的lower bound
-            buf_L, buf_U = self.lower_upper_lemire(self.buffer, r=window_size)  # LB_Keogh_EC lower bound计算
-
-            # start calculating online z-norm for points in buffer
-            C_stat = MovingStatistics()
-            # pruning counters for each phase
-            prune_kim = 0
-            prune_keogh_eg = 0
-            prune_keogh_ec = 0
-            # C is a circular array for keeping current content region; double size for avoiding "%" operator
-            C = np.zeros(Q * 2)  # candidate C sequence
-
-            for idx_p, p in enumerate(self.buffer):
-                C_stat.feed(p)
-                C[(idx_p % Q) + Q] = C[idx_p % Q] = p
-                if idx_p < Q - 1:
-                    continue
-
-                C_stat.snapshot()
-                i = (idx_p + 1) % Q  # index in C
-
-                # LB_KimFL
-                lb_kim = self.lb_kim_hierarchy(C, i, C_stat, q_norm)
-                # 级联lower bound策略
-                if lb_kim >= self.best_so_far:
-                    prune_kim += 1
-                    # reduce obsolute points from sum and sum square
-                    C_stat.drop(C[i])  # recall: `i = (idx_p + 1) % Q` ; circularly map to the left neighbor
-                    # CAUTION: DO NOT FORGET TO `DROP` BEFORE CONTINUE
-                    continue
-
-                # LB_Keogh_EQ
-                lb_keogh_eg, cb_eg = self.lb_keogh_eg_cumulative(C, i, C_stat,
-                                                                 q_norm_idx_dec, q_norm_U_dec, q_norm_L_dec)
-                if lb_keogh_eg >= self.best_so_far:
-                    prune_keogh_eg += 1
-                    C_stat.drop(C[i])
-                    continue
-
-                # z-normalization of t will be computed on the fly
-                C_norm = C_stat.znorm(C[i:i + Q])
-
-                # LB_Keogh_EC
-                # the start location of the data in query
-                I = idx_p - (Q - 1)
-                lb_keogh_ec, cb_ec = self.lb_keogh_ec_cumulative(
-                    q_norm_dec, q_norm_idx_dec, buf_L[I:], buf_U[I:], C_stat)
-                if lb_keogh_ec >= self.best_so_far:
-                    prune_keogh_ec += 1
-                    C_stat.drop(C[i])
-                    continue
-
-                # backward cumsum cb_eg & cb_ec to use in early abandoning DTW
-                cb_backcum = np.cumsum((cb_ec if lb_keogh_ec > lb_keogh_eg else cb_eg)[::-1])[::-1]
-                dist = self.dtw_distance(C_norm, q_norm, max_stray=window_size, cb_backcum=cb_backcum)
-                print(idx_p, round(dist, 8))
-                if dist < self.best_so_far:
-                    self.best_so_far = dist
-                    self.loc = idx_buf * (self.reset_period - Q + 1) + idx_p - Q + 1
-
-                C_stat.drop(C[i])
-
-            if len(self.buffer) < self.reset_period:
-                done = True
-            else:
-                idx_buf += 1
-
-            logger.info("#################### %d %d ####################", idx_buf, len(self.buffer))
-
-        point_scaned = idx_buf * (self.reset_period - Q + 1) + len(self.buffer)
-        result_json = {
-            "location": self.loc,
-            "dtw_distance": np.sqrt(self.best_so_far),
-            "n_scanned: ": point_scaned,
-            "n_prune_kim": prune_kim,
-            "n_prune_keogh_eg": prune_keogh_eg,
-            "n_prune_keogh_ec": prune_keogh_ec,
-            "n_calc_dtw": (point_scaned - prune_kim - prune_keogh_eg - prune_keogh_ec)
-        }
-        return self.loc, np.sqrt(self.best_so_far), result_json
-
-    def buffer_init(self, idx_buf, content, Q):
-        # use the last `m-1` points if available
-        self.buffer = [] if idx_buf == 0 else self.buffer[-(Q - 1):]
-        # fill the rest of buffer, as much as possible
-        self.buffer += seq(content).take(self.reset_period - len(self.buffer)).to_list()
-        return len(self.buffer)
-
-    def lower_upper_lemire(self, s, r):
-        # type: (Sequence[T], int) -> Tuple[np.ndarray, np.ndarray]
-        """
-        Finding the envelop of min and max value for LB_Keogh_EQ or EC
-        Implementation idea is introducted by Danial Lemire in his paper
-        "Faster Retrieval with a Two-Pass Dynamic-Time-Warping Lower Bound",Pattern Recognition 42(9) 2009
-        """
-        size = len(s)
-        L, U = np.empty(size), np.empty(size)
-        for j in range(size):  # should replace loop with vectorization for speed
-            region = s[max(j - r, 0): min(j + r, size)]  # CAUTION: `r+1` right open
-            L[j], U[j] = min(region), max(region)
-        return L, U
-
-    def lb_kim_hierarchy(self, C, i, C_stat, query):
-        """
-        Usually, LB_Kim take time O(m) for finding top,bottom,first and last
-        however, because of z-normalization the top and bottom cannot give significant benefits
-        and using the first and last points can be computed in constant time
-        the prunning power of LB_Kim is non-trivial,especially when the query is not long, say in length 128
-
-        :param C: C un-normed
-        :param i: starting index in C
-        :param query: query normed
-        :return:
-        """
-        Q = len(query)
-        # 1 point at front and back
-        x0, y0 = C_stat.znorm(C[i], C[(i + Q - 1)])
-        lb = self.dist_cb(x0, query[0]) + self.dist_cb(y0, query[Q - 1])
-        if lb >= self.best_so_far:
-            return lb
-
-        # 2 points at front
-        x1 = C_stat.znorm(C[i + 1])
-        lb += min(self.dist_cb(x1, query[0]), self.dist_cb(x0, query[1]), self.dist_cb(x1, query[1]))
-        if lb >= self.best_so_far:
-            return lb
-
-        # 2 points at back
-        y1 = C_stat.znorm(C[(i + Q - 2)])
-        lb += min(self.dist_cb(y1, query[Q - 1]), self.dist_cb(y0, query[Q - 2]), self.dist_cb(y1, query[Q - 2]))
-        if lb >= self.best_so_far:
-            return lb
-
-        # 3 points at front
-        x2 = C_stat.znorm(C[(i + 2)])
-        lb += min(self.dist_cb(x0, query[2]), self.dist_cb(x1, query[2]),
-                  self.dist_cb(x2, query[2]), self.dist_cb(x2, query[1]), self.dist_cb(x2, query[0]))
-        if lb >= self.best_so_far:
-            return lb
-
-        # 3 points at back
-        y2 = C_stat.znorm(C[(i + Q - 3)])
-        lb += min(self.dist_cb(y0, query[Q - 3]), self.dist_cb(y1, query[Q - 3]),
-                  self.dist_cb(y2, query[Q - 3]), self.dist_cb(y2, query[Q - 2]), self.dist_cb(y2, query[Q - 1]))
-        return lb
-
-    def lb_keogh_eg_cumulative(self, C, i, C_stat, query_argidx, U_ordered, L_ordered):
-        """
-        LB_Keogh 1: Create Envelop for the query
-        Note that because the query is known, envelop can be created once at the beginning.
-
-        :param query_argidx: sorted indices for the query
-        :param C:
-        :param C_mean:
-        :param C_std:
-        :param i: index of the starting location in t
-        :param U_ordered: upper envelops for the query, which already sorted
-        :param L_ordered: lower ...
-        :param best_so_far:
-        :return:
-        """
-        lb = 0
-        Q = len(U_ordered)
-        # current bound at each position.It will be used later for early abandoning in DTW
-        cur_bound = np.zeros(Q)
-        logger.debug("lb_keogh_eg_cumulative:mean=%f;std=%f", C_stat.mean, C_stat.std)
-
-        for o, u, l in zip(query_argidx, U_ordered, L_ordered):
-            if lb >= self.best_so_far:
-                break
-
-            x = C_stat.znorm(C[i + o])
-            # 计算重新排序后的Q的lower bound之间的距离
-            if x > u:
-                d = self.dist_cb(x, u)
-            elif x < l:
-                d = self.dist_cb(x, l)
-            else:
-                d = 0
-            lb += d
-            cur_bound[o] = d  # 把每个距离都记录下来，提供给后面Early Abandoning of DTW 使用
-        return lb, cur_bound
-
-    def lb_keogh_ec_cumulative(self, q_norm_dec, q_norm_idx_dec, buf_L, buf_U, C_stat):
-        """
-        LB_Keogh 2: Create Envelop for the data
-        Note that the envelops have bean created (in main function) when each data point has been read.
-
-        参数:
-            order: 根据标准化后的Q进行的排序对应的index列表
-            qo:sorted query
-            cb:（cb2）current bound at each position.Used later for early abandoning in DTW
-            l,u:lower and upper envelop of the current data(l_buff,u_buff)
-        """
-        Q = len(q_norm_dec)
-        lb = 0
-        cur_bound = np.zeros(Q)
-
-        # CAUTION: reorder beforehand, e.g. `buf_L[q_norm_idx_dec]`
-        for i, q, l, u in zip(q_norm_idx_dec, q_norm_dec, buf_L[q_norm_idx_dec], buf_U[q_norm_idx_dec]):
-            if lb >= self.best_so_far:
-                break
-            # z-normalization，对lower bound进行标准化处理(用于应对对chunk中的所有数据进行标准化)
-            U_z, L_z = C_stat.znorm(u, l)
-            if q > U_z:
-                d = self.dist_cb(q, U_z)
-            elif q < L_z:
-                d = self.dist_cb(q, L_z)
-            else:
-                d = 0
-            lb += d
-            cur_bound[i] = d
-        return lb, cur_bound
 
 
 if __name__ == '__main__':

@@ -7,14 +7,9 @@ Date:    2019/10/17 下午10:20
 """
 from __future__ import print_function, division, unicode_literals
 
-import time
-
 import math
-
 import re
-
-import numpy as np
-from sklearn.preprocessing import StandardScaler
+import time
 
 
 def ConvertELogStrToValue(eLogStr):
@@ -77,7 +72,8 @@ class Old_UCR_DTW(object):
         for every EPOCH points, all cummulative values, such as ex(sum),ex2,
         will be restarted for reducing the floating point error
         """
-        self.EPOCH = 100000  # for “flush out” any accumulated floating error
+        # self.EPOCH = 100000  # for “flush out” any accumulated floating error
+        self.EPOCH = 5000  # for debug
 
         self.d = None  # distance
         self.ex, self.ex2, self.mean, self.std = 0.0, 0.0, 0.0, 0.0
@@ -240,6 +236,7 @@ class Old_UCR_DTW(object):
             # loc is the real starting locatin of the nearest neighbor in the file
             self.bsf = dist
             self.loc = it * (self.EPOCH - self.m + 1) + i - self.m + 1
+        print((it, i, dist, self.bsf))  # for debug
 
     def LB_Keogh_for_abandon_DTW(self, lb_k, lb_k2):
         # 结合两个LB_Keogh来进行early abandoning DTW
