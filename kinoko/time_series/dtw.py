@@ -6,7 +6,8 @@ Python implementation of UCR_DTW & UCR_ED algorithm
 
 ref:
 
-- [code] https://github.com/JozeeLin/ucr-suite-python/blob/master/DTW.ipynb
+- [code-python] https://github.com/JozeeLin/ucr-suite-python/blob/master/DTW.ipynb
+- [code-C] https://github.com/klon/ucrdtw/blob/master/src/ucrdtw.c
 - [paper] https://www.cs.ucr.edu/~eamonn/SIGKDD_trillion.pdf
 
 Authors: qianweishuo<qzy922@gmail.com>
@@ -105,8 +106,8 @@ class UCR_DTW(object):
         self.u_buff = [0.0] * self.reset_period
         self.l_buff = [0.0] * self.reset_period
 
-    def dtw_distance(self, content, query, max_stray=None, use_rolling=True):
-        # type: (Sequence[T], Sequence[T], int, bool) -> float
+    def dtw_distance(self, content, query, max_stray=None, cb_backcum=None, use_rolling=True):
+        # type: (Sequence[T], Sequence[T], int, np.ndarray, bool) -> float
         """
         calculate the DTW distance between two sequences: `content` & `query`
 
@@ -114,6 +115,9 @@ class UCR_DTW(object):
         :param query: to which compare for
         :param max_stray: how many cells should not the warping path deviate beyond. c.f. Sakoe-Chiba Band
                           default use a tight value: abs(len(C)-len(Q))
+        :param cb_backcum: current_lower_bound which is cumsum'ed backward;
+                           approximates the lower bound of `dtw_cost(current_position -> north_east_corner)`.
+                           qv. Figure 6, right subplot in the KDD paper.
         :param use_rolling: whether to use DP rolling trick for memory-optimization
         :return: DTW distance
         """
@@ -123,11 +127,15 @@ class UCR_DTW(object):
         if max_stray is None:
             max_stray = abs(C - Q)  # default
         assert 0 <= max_stray <= min(C, Q) - 1, 'invalid max_stray'
+        if cb_backcum is not None:
+            assert len(content) == len(query), 'len(content) != len(query), `cb` should be None'
 
         if not use_rolling:  # naive version, for easy understanding
             # dp[i, j] defined as: DTW_distance between content[:i+1] & query[:j+1], excluding right bound
             dp = dok_matrix((C, Q), dtype=float)
             for i in range(C):
+                mc = INF  # ignore for now; means the `min(dp[i,:])` concept as pseudo code below
+
                 for j in range(Q):
                     if abs(j - i) > max_stray:
                         dp[i, j] = INF
@@ -141,6 +149,35 @@ class UCR_DTW(object):
                     else:
                         base = min(dp[i - 1, j], dp[i, j - 1], dp[i - 1, j - 1])
                     dp[i, j] = base + self.dist_cb(content[i], query[j])
+                    mc = min(mc, dp[i, j])
+
+                # we can abandon early if the current cummulative distance with lower bound together are larger than bsf
+                if cb_backcum is None:
+                    continue
+                """
+                Consider a "higher"(northern) point, say `(x, y)` where x > i;
+                whose DP path cost consists of two parts:
+                
+                1. `(0,0) --> (x,y)`
+                2. `(x,y) --> (C-1,Q-1)`
+                
+                For the first part, define `min_cost(x)` as `min(dp[x,:])`.
+                Since cost is mono-increasing w.r.t. row index, and `x > i`;
+                we known that `min_cost(x) >= min_cost(i)`
+                
+                For the second part, just use `cb_backcum` as a lower bound, read Figure 6 in KDD paper for detail.
+                we deduce that cost of `(x,y) --> (C-1,Q-1)` >= cb_backcum[x]
+                
+                Put it together, we conclude that:
+                   cost( (0,0) -> (x,y) -> (C-1, Q-1) )
+                =  cost( (0,0) -> (x,y) )                  +   cost( (x,y) -> (C-1, Q-1) )
+                >= min(dp[x,:])                            +   cb_backcum(x)
+                >= min(dp[i,:])                            +   cb_backcum(x)
+                """
+                x = i + max_stray  # take `x` as large as possibly allowed, for "earlier" abandon
+                if x < C and mc + cb_backcum[x] >= self.best_so_far:
+                    return mc + cb_backcum[x]
+
             return dp[-1, -1] if self.return_square else np.sqrt(dp[-1, -1])
         else:  # better space efficiency
             # rolling DP now defined as: current row of DTW distance
@@ -256,9 +293,13 @@ class UCR_DTW(object):
                     prune_keogh_ec += 1
                     continue
 
-                # cumsum cb_eg & cb_ec to use in early abandoning DTW
-                cb_joint = np.cumsum((cb_ec if lb_keogh_ec > lb_keogh_eg else cb_eg)[::-1])[::-1]
-                self.early_abandon_dtw(idx_buf, idx_p)
+                # backward cumsum cb_eg & cb_ec to use in early abandoning DTW
+                cb_backcum = np.cumsum((cb_ec if lb_keogh_ec > lb_keogh_eg else cb_eg)[::-1])[::-1]
+                dist = self.dtw_distance(C_norm, q_norm, max_stray=window_size, cb_backcum=cb_backcum,
+                                         use_rolling=False)
+                if dist < self.best_so_far:
+                    self.best_so_far = dist
+                    self.loc = idx_buf * (self.reset_period - Q + 1) + idx_p - Q + 1
 
                 # reduce obsolute points from sum and sum square,公式(5)的第二项
                 C_stat.drop(C[i])  # recall: `i = (idx_p + 1) % Q` ; circularly map to the left neighbor

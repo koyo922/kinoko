@@ -455,13 +455,16 @@ class Old_UCR_DTW(object):
                     y = float('inf')
                 else:
                     y = cost[k - 1]
+
                 if i - 1 < 0 or k + 1 > 2 * r:
                     x = float('inf')
+                else:  # CAUTION: 改成python时，这里漏了
+                    x = cost_prev[k + 1]
+
+                if i - 1 < 0 or j - 1 < 0:
+                    z = float('inf')
                 else:
-                    if i - 1 < 0 or j - 1 < 0:
-                        z = float('inf')
-                    else:
-                        z = cost_prev[k]
+                    z = cost_prev[k]
 
                 # Classic DTW calculation
                 cost[k] = min(min(x, y), z) + self.dist(A[i], B[j])
