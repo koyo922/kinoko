@@ -21,6 +21,8 @@ import logging
 import itertools
 import numpy as np
 import time
+from six.moves import zip as zip
+from six.moves import map as map
 
 from functional import seq
 from scipy.sparse import dok_matrix
@@ -238,20 +240,20 @@ class UCR_DTW(object):
                 # LB_Keogh_EQ
                 lb_keogh_eg, cb_eg = self.lb_keogh_eg_cumulative(C, i, C_stat,
                                                                  q_norm_idx_dec, q_norm_U_dec, q_norm_L_dec)
-                if lb_keogh_eg < self.best_so_far:
+                if lb_keogh_eg >= self.best_so_far:
                     prune_keogh_eg += 1
                     continue
 
                 # z-normalization of t will be computed on the fly
-                tz = (C[:Q] - C_mean) / C_std
+                C_norm = C_stat.znorm(C[i:i + Q])
 
                 # LB_Keogh_EC
                 # the start location of the data in query
                 I = idx_p - (Q - 1)
 
                 # 这里的buffer并没有进行normalization处理(所以，在lb_keogh_data_cumulative函数中进行标准化处理)，完整求出整个chunk中的lower bound
-                L_buf, U_buf = self.lower_upper_lemire(buffer, buf_size)  # LB_Keogh_EC 计算
-                lb_keogh_ec, cb2 = self.lb_keogh_ec_cumulative(q_norm_idx_dec, tz, q_norm_dec,
+                L_buf, U_buf = self.lower_upper_lemire(self.buffer, window_size)  # LB_Keogh_EC 计算
+                lb_keogh_ec, cb2 = self.lb_keogh_ec_cumulative(q_norm_idx_dec, C_norm, q_norm_dec,
                                                                L_buf[I:], U_buf[I:], C_mean, C_std,
                                                                best_so_far)
                 logger.debug("lb_keogh_EC:%f best_so_far:%f", lb_keogh_ec, best_so_far)
@@ -495,4 +497,4 @@ class UCR_DTW(object):
 
 if __name__ == '__main__':
     model = UCR_DTW()
-    model.search(content=itertools.imap(eval, open('data/Data_new.txt')), query=np.loadtxt('data/Query_new.txt'))
+    model.search(content=map(eval, open('data/Data_new.txt')), query=np.loadtxt('data/Query_new.txt'))
