@@ -11,6 +11,8 @@ import math
 import re
 import time
 
+from kinoko.func import profile
+
 
 def ConvertELogStrToValue(eLogStr):
     """
@@ -97,6 +99,7 @@ class Old_UCR_DTW(object):
         print("Pruned by LB_Keogh2: %.2f" % ((self.keogh2 / i) * 100), '%')
         print("DTW Calculation    : %.2f" % ((100 - self.kim + self.keogh + self.keogh2) / i * 100), '%')
 
+    @profile
     def main_run(self):
         self.t1 = time.time()  # start the clock
 
@@ -182,11 +185,16 @@ class Old_UCR_DTW(object):
                 # reduce obsolute points from sum and sum square,公式(5)的第二项
                 ex -= self.t[j]
                 ex2 -= self.t[j] * self.t[j]
+
+            if it >= 2:  # for debug
+                done = True
             if ep < self.EPOCH:
                 done = True
             else:
                 it += 1
             print("#" * 20, it, ep, "#" * 20)
+
+        print(self.kim, self.keogh, self.keogh2)
 
         i = it * (self.EPOCH - self.m + 1) + ep
         self.fp.close()
@@ -304,9 +312,9 @@ class Old_UCR_DTW(object):
             l: lower
             u: upper
         """
-        for ind in range(lenght):
-            l[ind] = min(t[(ind - r if ind - r >= 0 else 0):(ind + r if ind + r < lenght else lenght)])
-            u[ind] = max(t[(ind - r if ind - r >= 0 else 0):(ind + r if ind + r < lenght else lenght)])
+        for ind in range(lenght):  # CAUTION: 右开区间
+            l[ind] = min(t[(ind - r if ind - r >= 0 else 0):(ind + r + 1 if ind + r + 1 < lenght else lenght)])
+            u[ind] = max(t[(ind - r if ind - r >= 0 else 0):(ind + r + 1 if ind + r + 1 < lenght else lenght)])
 
     def lb_kim_hierarchy(self, t, q, j, lenght, mean, std, bsf=float('inf')):
         """

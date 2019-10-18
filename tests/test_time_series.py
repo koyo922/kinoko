@@ -47,3 +47,13 @@ def test_dtw_distance(content, query):
             ucr_dtw.dtw_distance(content, query, max_stray=10, rolling_level=1) ==
             ucr_dtw.dtw_distance(content, query, max_stray=10, rolling_level=2)
             )
+
+
+def test_dtw_search():
+    x1 = np.linspace(0, 50, 100, endpoint=False)
+    y1 = pd.Series(3.1 * np.sin(x1 / 1.5) + 3.5)
+    x2 = np.linspace(0, 25, 50, endpoint=False)
+    y2 = pd.Series(3.1 * np.sin((x2 + 4) / 1.5) + 3.5)
+    loc, dist, _stat = ucr_dtw.search(y1, y2)
+    assert 8 == loc
+    assert pytest.approx(0) == dist

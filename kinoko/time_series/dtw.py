@@ -25,8 +25,11 @@ from functional import seq
 from scipy.sparse import dok_matrix
 from six.moves import map as map
 from six.moves import zip as zip
+from six.moves import xrange as range
+
 from sklearn.preprocessing import StandardScaler
 
+from kinoko.func import profile
 from kinoko.misc.log_writer import init_log
 
 INF = float('inf')
@@ -97,6 +100,7 @@ class UCR_DTW(object):
         self.loc = None  # type: int
         self.best_so_far = INF
 
+    @profile
     def search(self, content, query, window_frac=None):
         # type: (Iterable[T], Sequence[T], Union[float, None]) -> Tuple[int, float, dict]
         """
@@ -120,16 +124,18 @@ class UCR_DTW(object):
 
         idx_buf = 0
         done = False
+        prune_cnt = Counter(kim=0, eg=0, ec=0)  # pruning counters for each phase
         while not done:
             # use the last `m-1` points if available
             self.buffer = [] if idx_buf == 0 else self.buffer[-(Q - 1):]
             self.buffer += seq(content).take(self.reset_period - len(self.buffer)).to_list()
+            # CAUTION: `self.buffer` is huge, DO NOT PUT IT INNER LOOP
+            buf_L, buf_U = self._lower_upper_lemire(self.buffer, r=window_size)  # for calc LB_Keogh_EC
 
             if len(self.buffer) <= Q - 1:
                 break
 
             C_stat = MovingStatistics()  # start calculating online z-norm for points in buffer
-            prune_cnt = Counter(kim=0, eg=0, ec=0)  # pruning counters for each phase
             # a circular array for keeping current content region; double size for avoiding "%" operator
             C = np.zeros(Q * 2)  # candidate C sequence
 
@@ -159,7 +165,6 @@ class UCR_DTW(object):
 
                 # ----- LB_Keogh_EC
                 idx_in_query = idx_p - (Q - 1)  # start location of the data in `query`
-                buf_L, buf_U = self._lower_upper_lemire(self.buffer, r=window_size)  # LB_Keogh_EC lower bound
                 lb_keogh_ec, cb_ec = self._lb_keogh_online(C_stat, q_argidx,  # CAUTION: keep ordered beforehand
                                                            buf_L[idx_in_query:][q_argidx],
                                                            buf_U[idx_in_query:][q_argidx], q_norm=q_norm)
@@ -203,7 +208,7 @@ class UCR_DTW(object):
         size = len(s)
         L, U = np.empty(size), np.empty(size)
         for j in range(size):  # should replace loop with vectorization for speed
-            region = s[max(j - r, 0): min(j + r, size)]  # CAUTION: `r+1` right open
+            region = s[max(j - r, 0): min(j + r + 1, size)]  # CAUTION: `r+1` right open
             L[j], U[j] = min(region), max(region)
         return L, U
 
@@ -253,6 +258,7 @@ class UCR_DTW(object):
                   self.dist_cb(y2, query[Q - 3]), self.dist_cb(y2, query[Q - 2]), self.dist_cb(y2, query[Q - 1]))
         return lb
 
+    @profile
     def _lb_keogh_online(self, C_stat, q_argidx, L, U, C=None, q_norm=None):
         # type: (MovingStatistics, ndarray, ndarray, ndarray, ndarray, ndarray) -> Tuple[float, ndarray]
         """
@@ -294,6 +300,7 @@ class UCR_DTW(object):
             cb[i] = d  # for usage in Early Abandoning of DTW
         return lb, cb
 
+    @profile
     def dtw_distance(self, content, query, max_stray=None, cb_backcum=None, rolling_level=2):
         # type: (Sequence[T], Sequence[T], int, ndarray, int) -> float
         """
@@ -370,6 +377,7 @@ class UCR_DTW(object):
                 if r is not None:
                     return r
             return dp[-1, -1]
+
         elif rolling_level == 1:  # O(Q) space
             # rolling DP now defined as: current row of DTW distance
             dp = np.cumsum([self.dist_cb(content[0], q) if j <= max_stray else INF
@@ -399,6 +407,7 @@ class UCR_DTW(object):
                 if r is not None:
                     return r
             return dp[-1]
+
         elif rolling_level == 2:  # O(max_stray) space
             # when calculating cell (i,j), we only need last row's cache of `[i-1, j-max_stray: j+max_stray+1]`
             # thus, achieving O(max_stray) space
@@ -414,9 +423,9 @@ class UCR_DTW(object):
                     if i == j == 0:
                         base = 0
                     else:
-                        u = INF if i - 1 < 0 or k + 1 > 2 * max_stray else cost_prev[k + 1]
-                        v = INF if j - 1 < 0 or k - 1 < 0 else cost[k - 1]
-                        w = INF if i - 1 < 0 or j - 1 < 0 else cost_prev[k]
+                        u = INF if i < 1 or k + 1 > 2 * max_stray else cost_prev[k + 1]
+                        v = INF if j < 1 or k < 1 else cost[k - 1]
+                        w = INF if i < 1 or j < 1 else cost_prev[k]
                         base = min(u, v, w)
                     cost[k] = base + self.dist_cb(content[i], query[j])
                     if cost[k] < mc:
@@ -429,10 +438,14 @@ class UCR_DTW(object):
                 cost, cost_prev = cost_prev, cost
             k -= 1
             return cost_prev[k]
+
         else:
             raise ValueError('invalid value for rolling_level: {}'.format(rolling_level))
 
 
-if __name__ == '__main__':
+def _demo_entry():
     model = UCR_DTW()
     model.search(content=map(eval, open('data/Data_new.txt')), query=np.loadtxt('data/Query_new.txt'))
+
+# if __name__ == '__main__':
+#     _demo_entry()
