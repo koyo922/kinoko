@@ -21,6 +21,8 @@ import logging
 import itertools
 import numpy as np
 import time
+
+from functional import seq
 from scipy.sparse import dok_matrix
 from typing import Sequence, Callable, TypeVar, Iterable, Tuple
 
@@ -53,6 +55,7 @@ class UCR_DTW(object):
         will be restarted for reducing the floating point error
         """
         self.reset_period = 100000  # for “flush out” any accumulated floating error
+        self.buffer = np.zeros(self.reset_period)
 
         self.d = None  # distance
         self.ex, self.ex2, self.mean, self.std = 0.0, 0.0, 0.0, 0.0
@@ -157,12 +160,10 @@ class UCR_DTW(object):
             q_norm[q_norm_idx_dec], q_norm_L[q_norm_idx_dec], q_norm_U[q_norm_idx_dec]
 
         idx_buf = 0
-        buffer = np.zeros(self.reset_period)
-
         done = False
         while not done:
             # fill the buffer with available content
-            buf_size = self.buffer_init(idx_buf, buffer, content, Q)
+            buf_size = self.buffer_init(idx_buf, content, Q)
             if buf_size <= Q - 1:
                 break
 
@@ -244,18 +245,18 @@ class UCR_DTW(object):
             "DTW Calculation": (point_scaned - prune_kim - prune_keogh_eg - prune_keogh_ec) / point_scaned
         })
 
-    def buffer_init(self, idx_buf, buffer, content, Q):
-        done = 0
-        if idx_buf >= 1:
-            # 把最后的m-1个时间点移到buffer的前面
-            buffer[:Q - 1] = buffer[-(Q - 1):]
-            done += Q - 1
+    def buffer_init(self, idx_buf, content, Q):
+        if idx_buf == 0:
+            n_read = 0
+        else:
+            self.buffer[:Q - 1] = self.buffer[-(Q - 1):]  # flip the last `m-1` points to front
+            n_read = Q - 1
 
         # fill the rest of buffer
-        # read buffer of size EPOCH or when all data has been read
-        # 把data file中的m-1个数据读进buffer
-        remaining = itertools.islice(content, self.reset_period - done)
-        return None
+        remaining = seq(content).take(self.reset_period - n_read).to_list()
+        self.buffer[n_read: n_read + len(remaining)] = remaining
+        n_read += len(remaining)
+        return n_read
 
     def get_mean_std(self, cum_x, cum_x2):
         Q = len(cum_x)
@@ -475,4 +476,4 @@ class UCR_DTW(object):
 
 if __name__ == '__main__':
     model = UCR_DTW()
-    model.search(content=map(eval, open('data/Data_new.txt')), query=np.loadtxt('data/Query_new.txt'))
+    model.search(content=itertools.imap(eval, open('data/Data_new.txt')), query=np.loadtxt('data/Query_new.txt'))
