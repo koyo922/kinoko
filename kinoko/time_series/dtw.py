@@ -152,8 +152,9 @@ class UCR_DTW(object):
 
         # create envelops for normalized query (viz. LB_Keogh_EQ)
         q_norm_L, q_norm_U = self.lower_upper_lemire(q_norm)
-        query_argidx = self.sort_query_order(q_norm)  # decreasing order
-        query_dec, QL_dec, QU_dec = q_norm[query_argidx], q_norm_L[query_argidx], q_norm_U[query_argidx]
+        q_norm_idx_dec = q_norm.__abs__().argsort()[::-1]  # decreasing order
+        q_norm_dec, q_norm_L_dec, q_norm_U_dec = \
+            q_norm[q_norm_idx_dec], q_norm_L[q_norm_idx_dec], q_norm_U[q_norm_idx_dec]
 
         idx_buf = 0
         buffer = np.zeros(self.reset_period)
@@ -194,7 +195,7 @@ class UCR_DTW(object):
                     continue
 
                 # LB_Keogh_EQ
-                lb_keogh_eg, cb_eg = self.lb_keogh_eg_cumulative(query_argidx, C, QU_dec, QL_dec, i,
+                lb_keogh_eg, cb_eg = self.lb_keogh_eg_cumulative(q_norm_idx_dec, C, q_norm_U_dec, q_norm_L_dec, i,
                                                                  C_mean, C_std, best_so_far)
                 logger.debug("lb_keogh_EG:%f best_so_far:%f", lb_keogh_eg, best_so_far)
                 if lb_keogh_eg < best_so_far:
@@ -210,7 +211,7 @@ class UCR_DTW(object):
 
                 # 这里的buffer并没有进行normalization处理(所以，在lb_keogh_data_cumulative函数中进行标准化处理)，完整求出整个chunk中的lower bound
                 L_buf, U_buf = self.lower_upper_lemire(buffer, buf_size)  # LB_Keogh_EC 计算
-                lb_keogh_ec, cb2 = self.lb_keogh_ec_cumulative(query_argidx, tz, query_dec,
+                lb_keogh_ec, cb2 = self.lb_keogh_ec_cumulative(q_norm_idx_dec, tz, q_norm_dec,
                                                                L_buf[I:], U_buf[I:], C_mean, C_std,
                                                                best_so_far)
                 logger.debug("lb_keogh_EC:%f best_so_far:%f", lb_keogh_ec, best_so_far)
@@ -278,7 +279,7 @@ class UCR_DTW(object):
     def sort_query_order(self, query):
         # type: (np.ndarray) -> np.ndarray
         """ 对标准化后的Q的所有元素取绝对值，然后对这些时间点的绝对值进行排序，获取对应的时间点索引序列 """
-        return query.__abs__().argsort()[::-1]
+        return
 
     def lower_upper_lemire(self, s):
         # type: (Sequence[T]) -> Tuple[np.ndarray, np.ndarray]
