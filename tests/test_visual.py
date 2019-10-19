@@ -10,8 +10,6 @@ from __future__ import unicode_literals
 import pandas as pd
 from typing import Text
 
-import six
-
 from kinoko.visual import pd_showing_detail
 
 
@@ -22,15 +20,8 @@ def test_pd_showing_detail():
     ], columns=['name', 'age', 'bio', 'story'])
 
     with pd_showing_detail(max_cols=3, max_colwidth=5):
-        if six.PY3:
-            assert r"""   name  ...    story
+        assert r"""   name  ...    story
 0  z...  ...    s... 
 1  lisi  ...    s... 
 
-[2 rows x 4 columns]""" == Text(df)
-        else:
-            assert r"""   name  ...  story
-0  z...  ...  s... 
-1  lisi  ...  s... 
-
-[2 rows x 4 columns]""" == Text(df)
+[2 rows x 4 columns]""".replace(' ', '') == Text(df).replace(' ', '')
