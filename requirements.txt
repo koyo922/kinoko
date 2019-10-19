@@ -19,3 +19,5 @@ tornado==4.3; python_version < "3.4"
 tornado; python_version >= "3.4"
 tqdm
 typing; python_version < "3.4"
+pathlib
+pandas<=0.24.0
