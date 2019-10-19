@@ -19,9 +19,6 @@ url_jumps = [
     ('http://nonexist.site', [])
 ]
 
-JINGDONG_REACHABLE = True  # os.system("ping -c 1 jd.com") == 0
-pytestmark = pytest.mark.skipif(not JINGDONG_REACHABLE, reason='not internet available')
-
 
 @pytest.mark.parametrize("url, jumps", url_jumps)
 def test_chase_redirection(url, jumps):
@@ -98,7 +95,7 @@ def test_patch_function_of_obj(mocker):
 
 def test_spy(mocker):
     mocker.spy(os, 'listdir')
-    print(os.listdir('/'))  # 用`-s`选项看命令行输出 PYTHONPATH=. py.test -s -vv ./tests/test_demo.py
+    print(os.listdir('/')[:5])  # 用`-s`选项看命令行输出 PYTHONPATH=. pytest -s -vv ./tests/test_demo.py
     assert os.listdir.called
 
 

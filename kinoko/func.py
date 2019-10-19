@@ -9,6 +9,8 @@ Authors: qianweishuo<qzy922@gmail.com>
 Date:    2019/6/27 下午11:20
 """
 from typing import Any, Iterable, Union, TypeVar
+
+import six
 from functional.pipeline import Sequence
 from functional import seq
 
@@ -20,7 +22,7 @@ def strip_fields(tup):
     return tuple(f.strip().replace(' ', '') for f in tup)
 
 
-def sliding(sequence, size, step=1, skip_non_full=True):
+def sliding(sequence, size, step=1, skip_non_full=False):
     # type: (Union[Sequence, Iterable], int, int, bool) -> Iterable[Any]
     """
     滑动窗口
@@ -35,7 +37,7 @@ def sliding(sequence, size, step=1, skip_non_full=True):
     for tup in s.sliding(size=size, step=step):
         if skip_non_full and tup.len() < size:
             break
-        yield tup
+        yield tuple(tup)
 
 
 def static_vars(**kwargs):
@@ -63,7 +65,7 @@ def try_flatten(sequence):
     :param sequence:
     :return:
     """
-    if sequence is None or len(sequence) == 0:  # pragma: no cover
+    if sequence is None or len(sequence) == 0:
         return None
     if len(sequence) == 1:
         return tuple(sequence)[0]
@@ -77,3 +79,15 @@ def try_tuple(obj):
         return obj
 
     return obj,  # NOTE the comma, made into tuple
+
+
+def identity(x):  # pragma: no cover
+    return x
+
+
+def dummy_fn(*args, **kwargs):  # pragma: no cover
+    pass
+
+
+# if not run by `kernprof`, then disable @profile
+profile = six.moves.builtins.__dict__.get('profile', identity)

@@ -36,21 +36,21 @@ class RESTful(object):
     Decorator class; simply wrapping a function into a RESTful GET service
     Usage:
     #----- Server side
-    @RESTful(port=8004, route='/')
+    @RESTful(port=8104, route='/')
     def introduce(name, friends):
         return '{} has friends: {}'.format(name.upper(), ', '.join(friends))
     introduce.serve()
 
     #----- Client side
-    $ curl 'http://localhost:8004?name=koyo' -d 'friends=tsuga' -d 'friends=Uncle.Li' -d 'friends=Robin'
+    $ curl 'http://localhost:8104?name=koyo' -d 'friends=tsuga' -d 'friends=Uncle.Li' -d 'friends=Robin'
     KOYO has friends: tsuga, yamamura, Robin%
     """
 
-    def __init__(self, port=8004, route='/'):
+    def __init__(self, port=8104, route='/'):
         # type: (RESTful, int, Text) -> None
         """
         Setting the default params of the RESTful service object
-        :param port: which port to listen, default to 8004; if <=1024, need sudo
+        :param port: which port to listen, default to 8104; if <=1024, need sudo
         :param route: which route to listen
         """
         self.port = port

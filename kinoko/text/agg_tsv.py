@@ -37,13 +37,13 @@ def main(console_args=None, agg_func=None):
     args = parser.parse_args(console_args or sys.argv[1:])
     if args.agg_func == 'sum':
         args.agg_func = lambda x: sum((float(v) if '.' in v else int(v)) for v in x)
-    elif args.agg_func == 'mean':
+    elif args.agg_func == 'mean':  # pragma: no cover
         args.agg_func = lambda x: sum(x) / len(x)
-    elif args.agg_func == 'first':
+    elif args.agg_func == 'first':  # pragma: no cover
         args.agg_func = lambda x: x[0]
-    elif args.agg_func == 'last':
+    elif args.agg_func == 'last':  # pragma: no cover
         args.agg_func = lambda x: x[-1]
-    else:
+    else:  # pragma: no cover
         assert args.agg_func is not None
         args.agg_func = agg_func
 
@@ -58,7 +58,7 @@ def main(console_args=None, agg_func=None):
     all_fields = set(args.keep_cols) | {args.reduce_col, }
     if args.output_template is None:
         template = args.sep.join('{{${}}}'.format(f) for f in sorted(all_fields))
-    else:
+    else:  # pragma: no cover
         template = args.output_template
 
     logger.info('aggregate and dumping')
@@ -68,9 +68,9 @@ def main(console_args=None, agg_func=None):
         col_mapping['${}'.format(args.reduce_col)] = Text(args.agg_func(v))
         fout.write(template.format(**col_mapping) + '\n')
     fout.flush()
-    if 'pytest' not in sys.modules:
+    if 'pytest' not in sys.modules:  # pragma: no cover
         fout.close()
 
 
 if __name__ == '__main__':
-    main()
+    main()  # pragma: no cover

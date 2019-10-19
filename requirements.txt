@@ -12,10 +12,12 @@ pymdown-extensions
 pytest>=4.6.3
 pytest-cov
 pytest-mock
-redo
+redo >= 2.0.3
 requests
 six
 tornado==4.3; python_version < "3.4"
 tornado; python_version >= "3.4"
 tqdm
 typing; python_version < "3.4"
+pathlib
+pandas<=0.24.0

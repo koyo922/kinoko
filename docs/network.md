@@ -5,10 +5,10 @@
 ### chasing HTTP-redirection(3xx)
 
 ```python
-from kinoko.misc.network.chase_redirection import chase_redirection, ChaseError
+from kinoko.misc.network.chase_redirection import chase, ChaseError
 
 try:
-    all_jumps = chase_redirection('http://www.cyberciti.biz/tips/', max_depth=3)
+    all_jumps = chase('http://www.cyberciti.biz/tips/', max_depth=3)
     # http redirected to https
     assert ['http://www.cyberciti.biz/tips/', 'https://www.cyberciti.biz/tips/'] == all_jumps
 except ChaseError:

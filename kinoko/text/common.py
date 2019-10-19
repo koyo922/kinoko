@@ -39,9 +39,7 @@ def no_special_chars(text, special_chars=TAB_OR_NEWLINE):
     text = ensure_text(text)  # 确保转成 Text类型
 
     if isinstance(special_chars, typing.Container):
-        special_chars = set(special_chars)  # 最好的情况，直接把原来的容器换成set
-    elif isinstance(special_chars, six.string_types):
-        special_chars = {c for c in ensure_text(special_chars)}  # 原来的字符串做成 字符set
+        special_chars = set(special_chars)  # turn the container into set; string_types are also Container
     else:
         raise ValueError('unsupported argument %s, please use type of `set/str/unicode`', repr(special_chars))
     return all(c not in text for c in special_chars)

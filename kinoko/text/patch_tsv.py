@@ -28,6 +28,7 @@ Date:    2019/6/27 下午11:20
 """
 from __future__ import unicode_literals, print_function
 
+import errno
 import sys
 from typing import Text
 
@@ -77,12 +78,12 @@ def main(console_args=sys.argv[1:], key_fmt_fn=strip_fields):
 
         try:
             fout.write(args.delimeter.join(segs) + '\n')
-        except IOError as ex:
-            if ex.errno == 32:  # broken pipe by downstream `head`
+        except IOError as ex:  # pragma: no cover
+            if ex.errno == errno.EPIPE:  # broken pipe by downstream `head`
                 break
             else:
                 raise
 
 
 if __name__ == '__main__':
-    main()
+    main()  # pragma: no cover

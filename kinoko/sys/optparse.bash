@@ -28,7 +28,7 @@ GNU_SED_CNT=$(sed -h 2>&1 | grep -c GNU)  # how many 'GNU' in `sed -h` output
 if (( BASH_VERSINFO < 4 )) || (( GNU_SED_CNT < 1 )) ; then
     cat << 'EOF'
 (... sleeping for 10s ...)
-BASH UNDER 4.0 (Mac OS default is 3.2) or Mac Default `sed` ARE NOT SUPPORTED
+NON BASH>=4.0 SHELL (Mac OS default is 3.2) or Mac Default `sed` ARE NOT SUPPORTED
 please upgrade by:
 
 # step1. install newer bash (>= 4.0)

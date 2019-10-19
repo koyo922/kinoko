@@ -65,5 +65,7 @@ nav:
   - Network: network.md
   - Bash Utils: bash.md
   - Functional Utils: func.md
+  - Visual Utils: visual.md
+  - Time Series Analysis Tool: time_series.md
   - Release Notes: changelog.md
   - Format Specimen: format_specimen.md

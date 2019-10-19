@@ -28,8 +28,11 @@ import redo as redo
 import requests
 from typing import Text
 
-from ...text.io import file_wrapper
-from ...misc.log_writer import init_log
+from pathlib import Path
+
+from kinoko.func import profile, dummy_fn
+from kinoko.text.io import file_wrapper
+from kinoko.misc.log_writer import init_log
 
 logger = init_log(__name__)
 
@@ -72,8 +75,8 @@ class NetworkError(ChaseError):
         self.jumps = jumps
 
 
-@redo.retriable(attempts=3, sleeptime=1, jitter=1)
-def chase_redirection(url, max_depth):
+@redo.retriable(attempts=3, sleeptime=3, jitter=1)
+def chase(url, max_depth):
     """
     追踪url重定向，返回最终的原始url和跳转层数
     :param url: 可能包含重定向的url
@@ -107,7 +110,7 @@ def chase_url_cli(argv=None):
         for url in file_wrapper(args['--input']):
             try:
                 url = url.rstrip('\n')
-                all_jumps = chase_redirection(url, max_depth)
+                all_jumps = chase(url, max_depth)
                 exception = None
             except (NetworkError, UnexpectedHttpStatus, DepthOverflow) as ex:
                 all_jumps = ex.jumps

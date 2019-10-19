@@ -36,6 +36,8 @@ def test_is_none_or_empty(ele, tgt):
 
 
 @pytest.mark.parametrize("args, tgt", [
+    ((u'中\t文', '\t\n\r'), False),
+
     # None "里面"不含有特殊字符
     ((None,), True),
     # 默认special_chars是 TAB_OR_NEWLINE
@@ -61,3 +63,8 @@ def test_is_none_or_empty(ele, tgt):
 def test_no_special_chars(args, tgt):
     """ test """
     assert tgt == no_special_chars(*args)
+
+
+def test_no_special_chars_edge():
+    with pytest.raises(ValueError):
+        no_special_chars('abc', 911)
