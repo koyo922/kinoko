@@ -2,6 +2,11 @@
 # -*- coding: utf-8 -*-
 # vim: tabstop=4 shiftwidth=4 expandtab number
 """
+[DO NOT USE IT]
+reference python implementation for developing and test
+
+https://github.com/JozeeLin/ucr-suite-python/blob/master/DTW.ipynb
+
 Authors: qianweishuo<qzy922@gmail.com>
 Date:    2019/10/17 下午10:20
 """

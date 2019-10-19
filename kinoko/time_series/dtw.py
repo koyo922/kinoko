@@ -41,9 +41,6 @@ def square_dist_fn(v1, v2):
     return (v1 - v2) ** 2
 
 
-T = TypeVar('T')
-
-
 class MovingStatistics(object):
     def __init__(self, mean=NAN, std=NAN):
         self.cum_x = 0
@@ -86,9 +83,9 @@ class UCR_DTW(object):
     reset_period = 100000  # for “flush out” any accumulated floating error
 
     def __init__(self, dist_cb=square_dist_fn, window_frac=0.05):
-        # type: (Callable[[T, T], float], float) -> None
+        # type: (Callable[[float, float], float], float) -> None
         """
-        :param dist_cb: callback function to calculate distance two elements of type `T`
+        :param dist_cb: callback function to calculate distance two floats
         :param window_frac: window_size will be calculated by `int(len(query) * window_frac)`
                             read the KDD-paper chapter 3.1 for Sakoe-Chiba-Band related concepts
         """
@@ -102,12 +99,12 @@ class UCR_DTW(object):
 
     @profile
     def search(self, content, query, window_frac=None):
-        # type: (Iterable[T], Sequence[T], Union[float, None]) -> Tuple[int, float, dict]
+        # type: (Iterable[float], Sequence[float], Union[float, None]) -> Tuple[int, float, dict]
         """
         Search `query` in `content`, find its nearest match period;
         returning that period's starting index and DTW_distance and running details
 
-        :param content: a sequence of object in type T, which can be used to compute distance by `self.dist_cb()`
+        :param content: a sequence of floats, which can be used to compute distance by `self.dist_cb()`
         :param query: a (typically) shorter sequence than content, which need to be searched for
         :param window_frac: overwrite object variable if needed; see `__init__()` for detail
         :return: tuple of: location, DTW_distance, running_details_as_dict
@@ -201,7 +198,7 @@ class UCR_DTW(object):
 
     @staticmethod
     def _lower_upper_lemire(s, r):
-        # type: (Sequence[T], int) -> Tuple[ndarray, ndarray]
+        # type: (Sequence[float], int) -> Tuple[ndarray, ndarray]
         """
         Finding the envelop of min and max value for LB_Keogh_EQ or EC
         Implementation idea is introducted by Danial Lemire in his paper
@@ -215,7 +212,7 @@ class UCR_DTW(object):
         return L, U
 
     def _lb_kim_hierarchy(self, C, i, C_stat, query):
-        # type: (ndarray, int, MovingStatistics, Sequence[T]) -> float
+        # type: (ndarray, int, MovingStatistics, Sequence[float]) -> float
         """
         Usually, LB_Kim take time O(m) for finding top,bottom,first and last
         however, because of z-normalization the top and bottom cannot give significant benefits
@@ -304,7 +301,7 @@ class UCR_DTW(object):
 
     @profile
     def dtw_distance(self, content, query, max_stray=None, cb_backcum=None, rolling_level=2):
-        # type: (Sequence[T], Sequence[T], int, ndarray, int) -> float
+        # type: (Sequence[float], Sequence[float], int, ndarray, int) -> float
         """
         calculate the DTW distance between two sequences: `content` & `query`
 

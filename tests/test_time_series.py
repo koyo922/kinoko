@@ -49,11 +49,15 @@ def test_dtw_distance(content, query):
             )
 
 
-def test_dtw_search():
+def test_dtw_search_sin():
+    dtw = UCR_DTW(dist_cb=lambda x, y: (x - y) ** 2, window_frac=0.05)
+
     x1 = np.linspace(0, 50, 100, endpoint=False)
-    y1 = pd.Series(3.1 * np.sin(x1 / 1.5) + 3.5)
-    x2 = np.linspace(0, 25, 50, endpoint=False)
-    y2 = pd.Series(3.1 * np.sin((x2 + 4) / 1.5) + 3.5)
-    loc, dist, _stat = ucr_dtw.search(y1, y2)
-    assert 8 == loc
-    assert pytest.approx(0) == dist
+    y1 = 3.1 * np.sin(x1 / 1.5) + 3.5
+
+    x2 = np.linspace(0, 25, 50, endpoint=False)  # half slice of x1
+    y2 = 3.1 * np.sin((x2 + 4) / 1.5) + 3.5  # same function but slided 4-units toward west
+
+    loc, dist, _stat = dtw.search(y1, y2)
+    assert 8 == loc  # 4 unit / 0.5 gap = 8
+    assert pytest.approx(0) == dist  # almost zero
